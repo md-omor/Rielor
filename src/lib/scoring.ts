@@ -1,36 +1,45 @@
-import { AnalysisBreakdown } from "@/types/analysis";
+import { DECISION_THRESHOLDS, SCORING_WEIGHTS } from "@/config/constants";
+import { AnalysisBreakdown, Decision } from "@/types/analysis";
 
 /**
- * Calculates the total weighted score.
- * Note: This function assumes that the input breakdown scores are already
- * normalized to be out of the max weight for that category.
- * e.g., if Skills weight is 30, a perfect skills match should provide 30 points.
+ * Calculates the total weighted score strictly following the user's rules.
+ * 
+ * Rules:
+ * 1. Each category score = round(match% * weight)
+ * 2. Final Score = sum(category scores)
+ * 3. If isHardCapped, finalScore = min(finalScore, 49)
  */
-import { DECISION_THRESHOLDS, SCORING_WEIGHTS } from "@/config/constants";
-
 export function calculateFinalScore(breakdown: AnalysisBreakdown): number {
-  let total = 0;
-  total += breakdown.requiredSkills;
-  total += breakdown.preferredSkills;
-  total += breakdown.tools;
-  total += breakdown.experience;
-  total += breakdown.education;
-  total += breakdown.eligibility;
-  
-  // Metadata scores have 0 weight by default, but we calculate them correctly
-  total += Math.round(breakdown.jobReality * (SCORING_WEIGHTS.JOB_REALITY / 100));
-  total += Math.round(breakdown.competition * (SCORING_WEIGHTS.COMPETITION / 100));
-  
+  let totalPoints = 0;
+
+  // 1. Required Skills (30)
+  totalPoints += Math.round((breakdown.requiredSkills / 100) * SCORING_WEIGHTS.REQUIRED_SKILLS);
+
+  // 2. Preferred Skills (10)
+  totalPoints += Math.round((breakdown.preferredSkills / 100) * SCORING_WEIGHTS.PREFERRED_SKILLS);
+
+  // 3. Tools (10)
+  totalPoints += Math.round((breakdown.tools / 100) * SCORING_WEIGHTS.TOOLS);
+
+  // 4. Experience (25)
+  totalPoints += Math.round(((breakdown.experience || 0) / 100) * SCORING_WEIGHTS.EXPERIENCE);
+
+  // 5. Education (15)
+  totalPoints += Math.round(((breakdown.education?.score || 0) / 100) * SCORING_WEIGHTS.EDUCATION);
+
+  // 6. Eligibility (10)
+  totalPoints += Math.round(((breakdown.eligibility?.score || 0) / 100) * SCORING_WEIGHTS.ELIGIBILITY);
+
+  // Apply Hard Cap
   if (breakdown.isHardCapped) {
-    total = Math.min(total, 49);
+    totalPoints = Math.min(totalPoints, 49);
   }
   
-  return total;
+  return totalPoints;
 }
 
-export function getDecision(score: number): "APPLY" | "APPLY_WITH_IMPROVEMENTS" | "IMPROVE" | "SKIP" {
-  if (score >= DECISION_THRESHOLDS.APPLY) return "APPLY";
-  if (score >= DECISION_THRESHOLDS.APPLY_WITH_IMPROVEMENTS) return "APPLY_WITH_IMPROVEMENTS";
+export function getDecision(score: number): Decision {
+  if (score >= DECISION_THRESHOLDS.PASS) return "PASS";
   if (score >= DECISION_THRESHOLDS.IMPROVE) return "IMPROVE";
-  return "SKIP";
+  return "REJECT";
 }
