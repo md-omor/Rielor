@@ -10,8 +10,7 @@ export const SCORING_WEIGHTS = {
 } as const;
 
 export const DECISION_THRESHOLDS = {
-  APPLY: 75,
-  APPLY_WITH_IMPROVEMENTS: 55,
+  PASS: 70,
   IMPROVE: 35,
-  // Below 35 is SKIP
+  // Below 35 is REJECT
 } as const;

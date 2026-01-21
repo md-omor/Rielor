@@ -1,127 +1,64 @@
-import { extractCandidateData, extractJobRequirements } from "@/lib/extract";
+import { performAnalysisFlow } from "@/lib/analysis-flow";
 import { parseFileFromFormData } from "@/lib/file-parser";
-import { matchJobWithCandidate } from "@/lib/match";
-import { calculateFinalScore, getDecision } from "@/lib/scoring";
-import { AnalysisResponse, CandidateProfile, JobRequirements } from "@/types/analysis";
-import { validateFile } from "@/utils/file-validation";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-export interface AnalyzeFilesResponse extends AnalysisResponse {
-  extractedData?: {
-    candidate: CandidateProfile;
-    job: JobRequirements;
-  };
-}
+const DEFAULT_USER_ID = "demo-user1";
 
-export async function POST(request: Request): Promise<NextResponse<AnalyzeFilesResponse | { error: string; details?: string }>> {
+export async function POST(request: Request) {
   try {
     const formData = await request.formData();
-    
-    // Get files from form data
-    const resumeFile = formData.get("resumeFile") as File | null;
-    const jobDescriptionFile = formData.get("jobDescriptionFile") as File | null;
-    
-    // Also support text input as fallback
-    const resumeText = formData.get("resumeText") as string | null;
-    const jobDescriptionText = formData.get("jobDescriptionText") as string | null;
+    const file = formData.get("file") as File;
+    const jobDescription = formData.get("jobDescription") as string;
+    const userIdFromForm = formData.get("userId") as string;
 
-    // Validate we have at least one input for each
-    if (!resumeFile && !resumeText) {
+    // 1. Validate Input
+    if (!file || !jobDescription) {
       return NextResponse.json(
-        { error: "Please provide a resume file or text" },
+        { error: "INVALID_INPUT", details: "Missing file or jobDescription" },
         { status: 400 }
       );
     }
 
-    if (!jobDescriptionFile && !jobDescriptionText) {
+    const targetUserId = userIdFromForm || DEFAULT_USER_ID;
+
+    // 2. Extract Text from File
+    let resumeText: string;
+    try {
+      const parseResult = await parseFileFromFormData(file);
+      resumeText = parseResult.text;
+    } catch (error: any) {
+      console.error("File Parsing Error:", error);
       return NextResponse.json(
-        { error: "Please provide a job description file or text" },
+        { error: "INVALID_INPUT", details: error.message || "Failed to parse file" },
         { status: 400 }
       );
     }
 
-    // Extract text from resume
-    let extractedResumeText: string;
-    if (resumeFile) {
-      const validation = validateFile(resumeFile);
-      if (!validation.valid) {
-        return NextResponse.json(
-          { error: `Resume file error: ${validation.error}` },
-          { status: 400 }
-        );
-      }
-      const result = await parseFileFromFormData(resumeFile);
-      extractedResumeText = result.text;
-    } else {
-      extractedResumeText = resumeText!;
+    if (!resumeText) {
+      return NextResponse.json(
+        { error: "INVALID_INPUT", details: "File contains no extractable text" },
+        { status: 400 }
+      );
     }
 
-    // Extract text from job description
-    let extractedJobText: string;
-    if (jobDescriptionFile) {
-      const validation = validateFile(jobDescriptionFile);
-      if (!validation.valid) {
-        return NextResponse.json(
-          { error: `Job description file error: ${validation.error}` },
-          { status: 400 }
-        );
-      }
-      const result = await parseFileFromFormData(jobDescriptionFile);
-      extractedJobText = result.text;
-    } else {
-      extractedJobText = jobDescriptionText!;
+    // 3. Perform Analysis Flow
+    const result = await performAnalysisFlow(targetUserId, resumeText, jobDescription);
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.error },
+        { status: result.status }
+      );
     }
 
-    // 1. Extract structured data using AI (parallel execution)
-    const [candidateProfile, jobRequirements] = await Promise.all([
-      extractCandidateData(extractedResumeText),
-      extractJobRequirements(extractedJobText),
-    ]);
-
-    // 2. Match logic
-    const { breakdown, missingSkills, notes } = matchJobWithCandidate(
-      jobRequirements,
-      candidateProfile
-    );
-
-    // 3. Calculate final score
-    const finalScore = calculateFinalScore(breakdown);
-
-    // 4. Get decision
-    const decision = getDecision(finalScore);
-
-    // 5. Construct response
-    const response: AnalyzeFilesResponse = {
-      finalScore,
-      decision,
-      breakdown,
-      missingSkills,
-      notes,
-      extractedData: {
-        candidate: candidateProfile,
-        job: jobRequirements,
-      },
-    };
-
-    return NextResponse.json(response);
+    return NextResponse.json(result.data);
 
   } catch (error) {
-    console.error("Analysis Error Details:", error);
-    
-    // Handle known parse errors
-    if (error && typeof error === "object" && "code" in error) {
-      const parseError = error as { code: string; message: string };
-      return NextResponse.json(
-        { error: parseError.message },
-        { status: 400 }
-      );
-    }
-
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("File Analysis Endpoint Error:", error);
     return NextResponse.json(
-      { error: "Internal Server Error", details: errorMessage },
+      { error: "ANALYSIS_FAILED" },
       { status: 500 }
     );
   }

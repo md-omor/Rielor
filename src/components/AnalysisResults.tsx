@@ -1,6 +1,6 @@
 "use client";
 
-import { AnalysisBreakdown, CandidateProfile, Decision, JobRequirements } from "@/types/analysis";
+import { AnalysisBreakdown, CandidateProfile, Decision, JobRequirements, ScoreWithStatus } from "@/types/analysis";
 
 interface AnalysisResultsProps {
   finalScore: number;
@@ -15,17 +15,11 @@ interface AnalysisResultsProps {
 }
 
 const DECISION_CONFIG: Record<Decision, { color: string; bgColor: string; icon: string; label: string }> = {
-  APPLY: {
+  PASS: {
     color: "text-green-700 dark:text-green-400",
     bgColor: "bg-green-100 dark:bg-green-900/30",
     icon: "✅",
     label: "Strong Match - Apply Now!",
-  },
-  APPLY_WITH_IMPROVEMENTS: {
-    color: "text-yellow-700 dark:text-yellow-400",
-    bgColor: "bg-yellow-100 dark:bg-yellow-900/30",
-    icon: "⚡",
-    label: "Good Match - Apply with Improvements",
   },
   IMPROVE: {
     color: "text-orange-700 dark:text-orange-400",
@@ -33,7 +27,7 @@ const DECISION_CONFIG: Record<Decision, { color: string; bgColor: string; icon: 
     icon: "📚",
     label: "Needs Improvement - Upskill First",
   },
-  SKIP: {
+  REJECT: {
     color: "text-red-700 dark:text-red-400",
     bgColor: "bg-red-100 dark:bg-red-900/30",
     icon: "⏭️",
@@ -41,27 +35,37 @@ const DECISION_CONFIG: Record<Decision, { color: string; bgColor: string; icon: 
   },
 };
 
-const BREAKDOWN_LABELS: Record<keyof AnalysisBreakdown, { label: string; maxScore: number }> = {
-  requiredSkills: { label: "Required Skills", maxScore: 30 },
-  preferredSkills: { label: "Preferred Skills", maxScore: 10 },
-  tools: { label: "Tools & Technologies", maxScore: 10 },
-  experience: { label: "Experience", maxScore: 25 },
-  education: { label: "Education", maxScore: 15 },
-  eligibility: { label: "Eligibility", maxScore: 10 },
-  jobReality: { label: "Job Reality", maxScore: 0 },
-  competition: { label: "Competition", maxScore: 0 },
-  isHardCapped: { label: "Hard Capped", maxScore: 0 },
+const BREAKDOWN_LABELS: Record<string, { label: string }> = {
+  requiredSkills: { label: "Required Skills" },
+  preferredSkills: { label: "Preferred Skills" },
+  tools: { label: "Tools & Technologies" },
+  experience: { label: "Experience Match" },
+  education: { label: "Education Match" },
+  eligibility: { label: "Eligibility" },
+  jobReality: { label: "Job Reality" },
+  competition: { label: "Competition" },
 };
 
-function ScoreBar({ score, maxScore, label }: { score: number; maxScore: number; label: string }) {
-  const percentage = (score / maxScore) * 100;
+function ScoreBar({ score, label, status }: { score: number; label: string; status?: string }) {
+  const percentage = score;
   
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-sm">
-        <span className="text-gray-600 dark:text-gray-400">{label}</span>
+        <div className="flex gap-2 items-center">
+          <span className="text-gray-600 dark:text-gray-400">{label}</span>
+          {status && (
+            <span className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-bold ${
+              status === "MATCHED" ? "bg-green-100 text-green-700" :
+              status === "PARTIAL" ? "bg-yellow-100 text-yellow-700" :
+              "bg-red-100 text-red-700"
+            }`}>
+              {status}
+            </span>
+          )}
+        </div>
         <span className="font-medium text-gray-900 dark:text-gray-100">
-          {score}/{maxScore}
+          {score}%
         </span>
       </div>
       <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -87,8 +91,7 @@ function CircularScore({ score }: { score: number }) {
   const strokeDashoffset = circumference - (score / 100) * circumference;
   
   const getScoreColor = (score: number) => {
-    if (score >= 75) return "#22c55e"; // green
-    if (score >= 55) return "#eab308"; // yellow
+    if (score >= 70) return "#22c55e"; // green
     if (score >= 35) return "#f97316"; // orange
     return "#ef4444"; // red
   };
@@ -161,16 +164,33 @@ export default function AnalysisResults({
           Score Breakdown
         </h3>
         <div className="space-y-4">
-          {(Object.keys(breakdown) as Array<keyof AnalysisBreakdown>)
-            .filter(key => typeof breakdown[key] === 'number')
-            .map((key) => (
+          {/* Numeric Categories */}
+          {(['requiredSkills', 'preferredSkills', 'tools', 'experience', 'jobReality', 'competition'] as Array<keyof AnalysisBreakdown>)
+            .filter(key => typeof breakdown[key] === 'number' && breakdown[key] !== null)
+            .map(key => (
               <ScoreBar
-                key={key}
+                key={key.toString()}
                 score={breakdown[key] as number}
-                maxScore={BREAKDOWN_LABELS[key].maxScore}
-                label={BREAKDOWN_LABELS[key].label}
+                label={BREAKDOWN_LABELS[key]?.label || key.toString()}
               />
-            ))}
+            ))
+          }
+
+          {/* Special Categories (Education & Eligibility) */}
+          {(['education', 'eligibility'] as Array<keyof AnalysisBreakdown>)
+            .filter(key => (breakdown[key] as ScoreWithStatus).status !== "NOT_REQUIRED")
+            .map(key => {
+              const data = breakdown[key] as ScoreWithStatus;
+              return (
+                <ScoreBar
+                  key={key.toString()}
+                  score={data.score || 0}
+                  label={BREAKDOWN_LABELS[key]?.label || key.toString()}
+                  status={data.status}
+                />
+              );
+            })
+          }
         </div>
       </div>
 
@@ -213,92 +233,28 @@ export default function AnalysisResults({
         </div>
       )}
 
-      {/* Extracted Data Preview */}
       {extractedData && (
         <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
             📊 Extracted Information
           </h3>
-          
           <div className="grid md:grid-cols-2 gap-6">
-            {/* Candidate Info */}
             <div className="space-y-3">
-              <h4 className="font-medium text-gray-900 dark:text-gray-100">
-                Your Profile
-              </h4>
+              <h4 className="font-medium text-gray-900 dark:text-gray-100">Your Profile</h4>
               {extractedData.candidate.candidate.fullName && (
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   <span className="font-medium">Name:</span> {extractedData.candidate.candidate.fullName}
                 </p>
               )}
-              {extractedData.candidate.experience.currentRole && (
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  <span className="font-medium">Current Role:</span> {extractedData.candidate.experience.currentRole}
-                </p>
-              )}
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 <span className="font-medium">Experience:</span> {extractedData.candidate.experience.totalYears} years
               </p>
-              
-              {/* Skills Display - Flattened for now */}
-              {(extractedData.candidate.skills.primary.length > 0 || extractedData.candidate.skills.secondary.length > 0) && (
-                <div>
-                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Skills:</span>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {[...extractedData.candidate.skills.primary, ...extractedData.candidate.skills.secondary].slice(0, 8).map((skill, i) => (
-                      <span
-                        key={i}
-                        className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded text-xs"
-                      >
-                        {skill}
-                      </span>
-                    ))}
-                    {([...extractedData.candidate.skills.primary, ...extractedData.candidate.skills.secondary].length > 8) && (
-                      <span className="text-xs text-gray-500">
-                        +{[...extractedData.candidate.skills.primary, ...extractedData.candidate.skills.secondary].length - 8} more
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
-
-            {/* Job Info */}
             <div className="space-y-3">
-              <h4 className="font-medium text-gray-900 dark:text-gray-100">
-                Job Requirements
-              </h4>
+              <h4 className="font-medium text-gray-900 dark:text-gray-100">Job Requirements</h4>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 <span className="font-medium">Role:</span> {extractedData.job.job.title || "Unknown"}
               </p>
-              {extractedData.job.job.company && (
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  <span className="font-medium">Company:</span> {extractedData.job.job.company}
-                </p>
-              )}
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                <span className="font-medium">Min Experience:</span> {extractedData.job.requirements.minimumExperienceYears || 0} years
-              </p>
-              {extractedData.job.requirements.requiredSkills.length > 0 && (
-                <div>
-                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Required Skills:</span>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {extractedData.job.requirements.requiredSkills.slice(0, 8).map((skill, i) => (
-                      <span
-                        key={i}
-                        className="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded text-xs"
-                      >
-                        {skill}
-                      </span>
-                    ))}
-                    {extractedData.job.requirements.requiredSkills.length > 8 && (
-                      <span className="text-xs text-gray-500">
-                        +{extractedData.job.requirements.requiredSkills.length - 8} more
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>

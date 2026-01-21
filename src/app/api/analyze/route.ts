@@ -1,59 +1,45 @@
-import { extractCandidateData, extractJobRequirements } from "@/lib/extract";
-import { matchJobWithCandidate } from "@/lib/match";
-import { calculateFinalScore, getDecision } from "@/lib/scoring";
-import { AnalysisRequest, AnalysisResponse } from "@/types/analysis";
+import { performAnalysisFlow } from "@/lib/analysis-flow";
+import { AnalysisRequest } from "@/types/analysis";
 import { NextResponse } from "next/server";
+
+export const runtime = "nodejs";
+
+const DEFAULT_USER_ID = "demo-user1";
 
 export async function POST(request: Request) {
   try {
     const body: AnalysisRequest = await request.json();
-    const { jobDescription, resumeText } = body;
+    const { jobDescriptionText, resumeText, userId } = body;
 
-    if (!jobDescription || !resumeText) {
+    // 1. Validate Input
+    if (!jobDescriptionText || !resumeText) {
       return NextResponse.json(
-        { error: "Missing jobDescription or resumeText" },
+        { 
+          error: "INVALID_INPUT", 
+          details: "Missing jobDescriptionText or resumeText" 
+        },
         { status: 400 }
       );
     }
 
-    // 1. Extract Data (Parallel execution for speed if real AI)
-    const [candidateProfile, jobRequirements] = await Promise.all([
-      extractCandidateData(resumeText),
-      extractJobRequirements(jobDescription),
-    ]);
+    const targetUserId = userId || DEFAULT_USER_ID;
 
-    // 2. Match Logic
-    const { breakdown, missingSkills, notes } = matchJobWithCandidate(
-      jobRequirements,
-      candidateProfile
-    );
+    // 2. Perform Analysis Flow
+    const result = await performAnalysisFlow(targetUserId, resumeText, jobDescriptionText);
 
-    // 3. Calculate Final Score
-    const finalScore = calculateFinalScore(breakdown);
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.error },
+        { status: result.status }
+      );
+    }
 
-    // 4. Normalize & Decide
-    const decision = getDecision(finalScore);
-
-    // 5. Construct Response
-    const response: AnalysisResponse = {
-      finalScore,
-      decision,
-      breakdown,
-      missingSkills,
-      notes,
-      debug: {
-        candidateRaw: candidateProfile.debug?.rawAIResponse,
-        jobRaw: jobRequirements.debug?.rawAIResponse,
-      }
-    };
-
-    return NextResponse.json(response);
+    return NextResponse.json(result.data);
 
   } catch (error) {
-    console.error("Analysis Error Details:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("Endpoint Error:", error);
     return NextResponse.json(
-      { error: "Internal Server Error", details: errorMessage },
+      { error: "ANALYSIS_FAILED" },
       { status: 500 }
     );
   }

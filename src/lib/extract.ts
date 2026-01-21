@@ -17,7 +17,8 @@ async function callGeminiAPI(prompt: string): Promise<string> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }]
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0 }
     })
   });
 
@@ -74,6 +75,15 @@ async function callAI(prompt: string): Promise<string> {
     } catch (e: any) {
       console.warn("Gemini Failed:", e.message);
       errors.push(`Gemini: ${e.message}`);
+
+      // Retry Gemini once before falling back (reduces provider-switch variance)
+      try {
+        console.log("Retrying Gemini (1.5-flash)...");
+        return await callGeminiAPI(prompt);
+      } catch (e2: any) {
+        console.warn("Gemini Retry Failed:", e2.message);
+        errors.push(`GeminiRetry: ${e2.message}`);
+      }
     }
   } else {
     console.warn("Skipping Gemini (No Key)");
@@ -110,15 +120,32 @@ function cleanJSON(text: string): string {
   return clean.trim();
 }
 
+function safeParseJSONObject(text: string): any {
+  const cleaned = cleanJSON(text);
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    if (start !== -1 && end !== -1 && end > start) {
+      const slice = cleaned.slice(start, end + 1);
+      return JSON.parse(slice);
+    }
+    throw new Error("AI returned non-JSON output");
+  }
+}
+
 /**
  * Normalizes a skill string for consistent matching and storage.
  * MANDATORY IMPLEMENTATION
  */
 function normalize(skill: string): string {
+  if (!skill) return "";
   return skill
     .toLowerCase()
-    .replace(/\.js/g, "")
-    .replace(/[^a-z0-9+]/g, " ")
+    .replace(/\.js\b/g, "")
+    .replace(/\+js\b/g, "")
+    .replace(/[^a-z0-9+#]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -127,6 +154,23 @@ function normalizeSkills(skills: string[]): string[] {
   if (!Array.isArray(skills)) return [];
   // Filter out empty strings after normalization and deduplicate
   return [...new Set(skills.map(normalize).filter(s => s.length > 0))];
+}
+
+function keyify(text: string): string {
+  return (text || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function filterSkillsByEvidence(sourceText: string, skills: string[]): string[] {
+  const srcKey = keyify(sourceText);
+  if (!srcKey) return [];
+  const out: string[] = [];
+  for (const s of skills) {
+    if (typeof s !== "string") continue;
+    const k = keyify(s);
+    if (k.length < 3) continue;
+    if (srcKey.includes(k)) out.push(s);
+  }
+  return out;
 }
 
 // Output Interface matching Strict JSON Prompt
@@ -177,6 +221,7 @@ Your task is to convert unstructured resume text into structured JSON.
 Follow the schema exactly.
 If a field is missing, return null or empty arrays.
 Do NOT infer or guess information.
+CRITICAL: Extract ALL technical skills, languages, and frameworks mentioned ANYWHERE in the text (including summary, experience, and projects) into the "skills" object.
 Do NOT include explanations.
 Return ONLY valid JSON.
 
@@ -237,8 +282,7 @@ Return JSON only.`;
   try {
     const responseText = await callAI(prompt);
     console.log("🔍 Extraction Raw Output:", responseText); // Debugging
-    const cleanText = cleanJSON(responseText);
-    const data: ResumeExtractionResult = JSON.parse(cleanText);
+    const data: ResumeExtractionResult = safeParseJSONObject(responseText);
     
     // valid JSON check (basic)
     if (!data || typeof data !== 'object') {
@@ -261,7 +305,7 @@ Return JSON only.`;
           role: h.role || null,
           company: h.company || null,
           durationYears: typeof h.durationYears === 'number' ? h.durationYears : 0,
-          technologies: normalizeSkills(h.technologies || [])
+          technologies: filterSkillsByEvidence(text, normalizeSkills(h.technologies || []))
         })) : []
       },
       education: {
@@ -276,7 +320,7 @@ Return JSON only.`;
       },
       projects: Array.isArray(data.projects) ? data.projects.map(p => ({
         name: p.name || null,
-        technologies: normalizeSkills(p.technologies || []),
+        technologies: filterSkillsByEvidence(text, normalizeSkills(p.technologies || [])),
         description: p.description || null
       })) : [],
       certifications: Array.isArray(data.certifications) ? data.certifications : [],
@@ -334,6 +378,7 @@ export async function extractJobRequirements(text: string): Promise<JobRequireme
 You are a job description analysis engine.
 Extract hiring requirements into structured JSON.
 Follow the schema exactly.
+CRITICAL: Identify ALL required and preferred skills mentioned in the entire text. If a skill is mentioned as mandatory or in the context of "experience in", put it in "requiredSkills".
 Do NOT infer missing data.
 Return ONLY valid JSON.
 
@@ -372,10 +417,14 @@ Return JSON only.`;
 
   try {
     const responseText = await callAI(prompt);
-    const cleanText = cleanJSON(responseText);
-    const data: JobExtractionResult = JSON.parse(cleanText);
+    const data: JobExtractionResult = safeParseJSONObject(responseText);
 
     // Map strict output to Application JobRequirements, ensuring type safety
+    const reqSkills = filterSkillsByEvidence(text, normalizeSkills(data.requirements?.requiredSkills || []));
+    const prefSkills = filterSkillsByEvidence(text, normalizeSkills(data.requirements?.preferredSkills || []));
+    const tools = filterSkillsByEvidence(text, normalizeSkills(data.requirements?.tools || []));
+    const keywords = filterSkillsByEvidence(text, normalizeSkills(data.keywords || []));
+
     const jobReqs: JobRequirements = {
       job: {
         title: data.job?.title || "Unknown Role",
@@ -386,13 +435,13 @@ Return JSON only.`;
       requirements: {
         minimumExperienceYears: typeof data.requirements?.minimumExperienceYears === 'number' ? data.requirements.minimumExperienceYears : 0,
         educationLevel: data.requirements?.educationLevel || null,
-        requiredSkills: normalizeSkills(data.requirements?.requiredSkills || []),
-        preferredSkills: normalizeSkills(data.requirements?.preferredSkills || []),
-        tools: normalizeSkills(data.requirements?.tools || [])
+        requiredSkills: reqSkills,
+        preferredSkills: prefSkills,
+        tools
       },
       responsibilities: Array.isArray(data.responsibilities) ? data.responsibilities : [],
       seniority: data.seniority || "unknown",
-      keywords: normalizeSkills(data.keywords || []),
+      keywords,
       meta: {
         remoteAllowed: !!data.meta?.remoteAllowed,
         visaRequired: !!data.meta?.visaRequired
