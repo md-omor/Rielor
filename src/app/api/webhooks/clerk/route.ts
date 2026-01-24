@@ -1,4 +1,5 @@
 import { deleteUser, getOrCreateUser } from "@/lib/credits";
+import clientPromise from "@/lib/mongodb";
 import { clerkClient } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { Webhook } from "svix";
@@ -14,7 +15,40 @@ type ClerkWebhookEvent = {
   };
 };
 
-export async function GET() {
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const ping = url.searchParams.get("ping");
+
+  if (ping === "1") {
+    try {
+      const client = await clientPromise;
+      const dbName = process.env.MONGODB_DB || "applivize";
+      const db = client.db(dbName);
+      const result = await db.command({ ping: 1 });
+      return NextResponse.json(
+        {
+          ok: true,
+          mongodb: {
+            ping: result?.ok === 1 ? "ok" : "unknown",
+            db: dbName,
+          },
+        },
+        { status: 200 }
+      );
+    } catch (err) {
+      const e = err as { name?: string; message?: string; stack?: string };
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "MONGODB_PING_FAILED",
+          name: e?.name,
+          message: e?.message,
+        },
+        { status: 500 }
+      );
+    }
+  }
+
   return NextResponse.json({ ok: true });
 }
 
