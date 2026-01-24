@@ -2,11 +2,8 @@ import { MongoClient, MongoClientOptions } from "mongodb";
 
 const uri = process.env.MONGODB_URI;
 
-// Simplified options - let the connection string handle TLS settings
+// Let the connection string / driver handle TLS settings for MongoDB Atlas
 const options: MongoClientOptions = {
-  tls: true,
-  tlsAllowInvalidCertificates: true,
-  tlsAllowInvalidHostnames: true,
   serverSelectionTimeoutMS: 30000,
   connectTimeoutMS: 30000,
   socketTimeoutMS: 30000,
