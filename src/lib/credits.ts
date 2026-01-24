@@ -13,6 +13,11 @@ async function getUsersCollection() {
   return db.collection<UserAccount>("users");
 }
 
+export async function deleteUser(userId: string): Promise<void> {
+  const users = await getUsersCollection();
+  await users.deleteOne({ userId });
+}
+
 /**
  * Gets a user or creates a new one with 10 initial credits
  */
