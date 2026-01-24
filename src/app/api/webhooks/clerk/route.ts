@@ -49,13 +49,9 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error: "INVALID_SIGNATURE",
-        ...(isDev
-          ? {
-              name: e?.name,
-              message: e?.message,
-              stack: e?.stack,
-            }
-          : {}),
+        name: e?.name,
+        message: e?.message,
+        ...(isDev ? { stack: e?.stack } : {}),
       },
       { status: 400 }
     );
@@ -81,13 +77,9 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: "DELETE_FAILED",
-          ...(isDev
-            ? {
-                name: e?.name,
-                message: e?.message,
-                stack: e?.stack,
-              }
-            : {}),
+          name: e?.name,
+          message: e?.message,
+          ...(isDev ? { stack: e?.stack } : {}),
         },
         { status: 500 }
       );
@@ -121,13 +113,9 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error: "UPSERT_FAILED",
-        ...(isDev
-          ? {
-              name: e?.name,
-              message: e?.message,
-              stack: e?.stack,
-            }
-          : {}),
+        name: e?.name,
+        message: e?.message,
+        ...(isDev ? { stack: e?.stack } : {}),
       },
       { status: 500 }
     );
