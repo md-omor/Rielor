@@ -20,7 +20,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Applivize - AI Powered Job Analysis",
+  title: "Rielor - AI Powered Job Analysis",
   description: "Understand your job fit before you apply. Optimize your resume for ATS and land your dream job.",
 };
 

@@ -86,9 +86,9 @@ const Header = () => {
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 group">
           <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center font-bold text-white text-xl uppercase transition-transform group-hover:scale-105">
-          A
+          R
           </div>
-          <span className="font-bold text-2xl text-slate-900 tracking-tighter">Applivize <span className="text-[10px] text-red-500">BETA</span></span>
+          <span className="font-bold text-2xl text-slate-900 tracking-tighter">Rielor <span className="text-[10px] text-red-500">BETA</span></span>
         </Link>
 
         {/* Navigation */}

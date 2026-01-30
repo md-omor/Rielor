@@ -24,7 +24,7 @@ export async function performAnalysisFlow(
 
     // 4. Save Analysis Result to DB
     const client = await clientPromise;
-    const db = client.db(process.env.MONGODB_DB || "applivize");
+    const db = client.db(process.env.MONGODB_DB || "rielor");
     const records = db.collection<AnalysisRecord>("analysis_records");
 
     const record: AnalysisRecord = {

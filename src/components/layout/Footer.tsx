@@ -9,9 +9,9 @@ const GlobalFooter = () => {
           <div className="col-span-1 md:col-span-2">
             <Link href="/" className="flex items-center gap-2 mb-4">
               <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center font-bold text-white text-lg uppercase">
-                J
+                R
               </div>
-              <span className="font-bold text-xl text-slate-900 tracking-tight">Applivize</span>
+              <span className="font-bold text-xl text-slate-900 tracking-tight">Rielor</span>
             </Link>
             <p className="text-slate-500 max-w-sm text-sm leading-relaxed">
               Empowering job seekers with AI-driven insights. Understand your alignment with any job description and optimize your resume for success.
@@ -42,7 +42,7 @@ const GlobalFooter = () => {
         {/* Bottom Bar */}
         <div className="border-t border-slate-200 pt-8 flex flex-col md:row justify-between items-center gap-4">
           <p className="text-slate-400 text-xs">
-            © {new Date().getFullYear()} Applivize AI. All rights reserved.
+            © {new Date().getFullYear()} Rielor AI. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
             <span className="text-slate-400 text-xs">Built for professionals</span>

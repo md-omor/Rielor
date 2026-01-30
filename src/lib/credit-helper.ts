@@ -4,7 +4,7 @@ const INITIAL_FREE_CREDITS = 3;
 
 async function getUsersCollection() {
   const client = await clientPromise;
-  const db = client.db(process.env.MONGODB_DB || "applivize");
+  const db = client.db(process.env.MONGODB_DB || "rielor");
   return db.collection("users");
 }
 

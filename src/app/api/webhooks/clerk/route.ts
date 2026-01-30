@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   if (ping === "1") {
     try {
       const client = await clientPromise;
-      const dbName = process.env.MONGODB_DB || "applivize";
+      const dbName = process.env.MONGODB_DB || "rielor";
       const db = client.db(dbName);
       const result = await db.command({ ping: 1 });
       return NextResponse.json(

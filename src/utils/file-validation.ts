@@ -1,5 +1,5 @@
 /**
- * File validation utilities for Applivize platform
+ * File validation utilities for Rielor platform
  */
 
 // Maximum file size: 10MB

@@ -28,7 +28,7 @@ const EmpathySection: React.FC = () => {
           </div>
 
           <p className="text-slate-400 max-w-2xl text-lg">
-            Job hunting is hard enough. We built Applivize to give you back control. Stop wondering and start knowing exactly where you stand.
+            Job hunting is hard enough. We built Rielor to give you back control. Stop wondering and start knowing exactly where you stand.
           </p>
         </div>
       </div>

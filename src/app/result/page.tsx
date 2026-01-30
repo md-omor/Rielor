@@ -56,7 +56,7 @@ export default function ResultPage() {
         title: "NEXT STEPS: INTERVIEW READY",
         message: "Your profile is a near-perfect match. Focus on quantifying your impact during interviews and preparing for behavioral questions.",
         buttonText: "Join Prep Community",
-        action: () => window.open('https://discord.gg/applivize', '_blank')
+        action: () => window.open('https://discord.gg/rielor', '_blank')
       };
     }
 

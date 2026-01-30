@@ -161,7 +161,7 @@ export default function AnalysisForm() {
               </>
             ) : (
               <>
-                🎯 Analyze Applivize
+                🎯 Analyze Rielor
               </>
             )}
           </button>
@@ -214,7 +214,7 @@ export default function AnalysisForm() {
             </svg>
             <div>
               <h4 className="font-medium text-blue-900 dark:text-blue-100">
-                Analyzing your Applivize...
+                Analyzing your Rielor...
               </h4>
               <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
                 Extracting data and calculating match score. This may take a few moments.

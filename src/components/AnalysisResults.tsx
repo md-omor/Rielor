@@ -151,7 +151,7 @@ export default function AnalysisResults({
               </h2>
             </div>
             <p className="text-gray-600 dark:text-gray-400">
-              Your Applivize Score
+              Your Rielor Score
             </p>
           </div>
           <CircularScore score={finalScore} />

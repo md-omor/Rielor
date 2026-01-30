@@ -10,7 +10,7 @@ function asFiniteNumber(value: unknown): number | null {
 async function getUsersCollection() {
   try {
     const client = await clientPromise;
-    const db = client.db(process.env.MONGODB_DB || "applivize");
+    const db = client.db(process.env.MONGODB_DB || "rielor");
     return db.collection<UserAccount>("users");
   } catch (err) {
     const error = err as Error;

@@ -61,9 +61,9 @@ const CareerInsightsPage = () => {
                   "Don't just list your tools. List the impact those tools had on the business. Recruiters search for 'SQL', but they hire 'SQL-driven revenue growth'."
                 </p>
                 <div className="flex items-center gap-4">
-                   <div className="w-12 h-12 rounded-full bg-slate-900 flex items-center justify-center text-white font-bold">J</div>
+                   <div className="w-12 h-12 rounded-full bg-slate-900 flex items-center justify-center text-white font-bold">R</div>
                    <div>
-                     <p className="text-sm font-bold text-slate-900">Applivize Analysis Team</p>
+                     <p className="text-sm font-bold text-slate-900">Rielor Analysis Team</p>
                      <p className="text-xs text-slate-500">Recruitment Data Analysts</p>
                    </div>
                 </div>
