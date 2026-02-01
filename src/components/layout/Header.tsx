@@ -1,15 +1,19 @@
 "use client";
 
 import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton, useUser } from "@clerk/nextjs";
-import { Coins } from "lucide-react";
+import { Coins, Menu, X } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+
+import logo from "@/assets/logo3.png";
 
 const Header = () => {
   const pathname = usePathname();
   const [credits, setCredits] = useState<number | null>(null);
   const [isCreditsLoading, setIsCreditsLoading] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { isSignedIn } = useUser();
 
   const fetchCredits = useCallback(async () => {
@@ -69,6 +73,10 @@ const Header = () => {
     }
   }, [isSignedIn, pathname, fetchCredits]);
 
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [pathname]);
+
   const navLinks = [
     
     { name: "Analyze Resume", href: "/upload" },
@@ -82,64 +90,147 @@ const Header = () => {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-slate-100 bg-white">
-      <div className="container mx-auto px-4 h-20 flex items-center justify-between">
-        {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 group">
-          <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center font-bold text-white text-xl uppercase transition-transform group-hover:scale-105">
-          R
+      <div className="container mx-auto px-4">
+        <div className="h-16 sm:h-20 flex items-center justify-between">
+          {/* Logo */}
+          <Link href="/" className="flex items-center gap-2 group">
+          <div className=" h-8  sm:h-10">
+            <Image
+              src={logo}
+              alt="Rielor logo"
+              priority
+              className="w-full h-full object-contain"
+            />
           </div>
-          <span className="font-bold text-2xl text-slate-900 tracking-tighter">Rielor <span className="text-[10px] text-red-500">BETA</span></span>
-        </Link>
+            <span className="font-bold text-xl sm:text-2xl text-slate-900 tracking-tighter whitespace-nowrap">
+              Rielor <span className="text-[10px] text-red-500">BETA</span>
+            </span>
+    
+          </Link>
 
-        {/* Navigation */}
-        <nav className="hidden md:flex items-center gap-8">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={`text-sm font-medium transition-colors hover:text-slate-900 ${
-                isActive(link.href) ? "text-slate-900" : "text-slate-500"
-              }`}
+          {/* Navigation */}
+          <nav className="hidden md:flex items-center gap-8">
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`text-sm font-medium transition-colors hover:text-slate-900 ${
+                  isActive(link.href) ? "text-slate-900" : "text-slate-500"
+                }`}
+              >
+                {link.name}
+              </Link>
+            ))}
+          </nav>
+
+          {/* Auth Actions */}
+          <div className="flex items-center gap-3">
+            <div className="hidden md:flex items-center gap-4">
+              <SignedIn>
+                {isCreditsLoading && (
+                  <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-100 shadow-sm">
+                    <Coins className="w-4 h-4 text-emerald-500" />
+                    <span className="text-sm font-medium text-slate-400">Loading…</span>
+                  </div>
+                )}
+                {!isCreditsLoading && credits !== null && (
+                  <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-100 shadow-sm">
+                    <Coins className="w-4 h-4 text-emerald-500" />
+                    <span className="text-sm font-medium text-slate-700">
+                      {credits} Credits
+                    </span>
+                  </div>
+                )}
+              </SignedIn>
+              <SignedOut>
+                <SignInButton>
+                  <button className="text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors px-4 py-2 cursor-pointer">
+                    Sign In
+                  </button>
+                </SignInButton>
+                <SignUpButton>
+                  <button className="bg-slate-900 text-white text-sm font-semibold px-6 py-2.5 rounded-full hover:bg-slate-800 transition-all shadow-sm hover:shadow-md active:scale-95 cursor-pointer">
+                    Sign Up
+                  </button>
+                </SignUpButton>
+              </SignedOut>
+              <SignedIn>
+                <UserButton appearance={{ elements: { avatarBox: "w-9 h-9" } }} />
+              </SignedIn>
+            </div>
+
+            <SignedIn>
+              <div className="md:hidden">
+                <UserButton appearance={{ elements: { avatarBox: "w-9 h-9" } }} />
+              </div>
+            </SignedIn>
+
+            <button
+              type="button"
+              className="md:hidden inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-700 shadow-sm hover:bg-slate-50"
+              aria-label="Toggle menu"
+              aria-expanded={isMobileMenuOpen}
+              aria-controls="mobile-menu"
+              onClick={() => setIsMobileMenuOpen((v) => !v)}
             >
-              {link.name}
-            </Link>
-          ))}
-        </nav>
-
-        {/* Auth Actions */}
-        <div className="flex items-center gap-4">
-          <SignedIn>
-            {isCreditsLoading && (
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-100 shadow-sm">
-                <Coins className="w-4 h-4 text-emerald-500" />
-                <span className="text-sm font-medium text-slate-400">Loading…</span>
-              </div>
-            )}
-            {!isCreditsLoading && credits !== null && (
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-100 shadow-sm">
-                <Coins className="w-4 h-4 text-emerald-500" />
-                <span className="text-sm font-medium text-slate-700">
-                  {credits} Credits
-                </span>
-              </div>
-            )}
-          </SignedIn>
-          <SignedOut>
-            <SignInButton>
-              <button className="text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors px-4 py-2 cursor-pointer">
-                Sign In
-              </button>
-            </SignInButton>
-            <SignUpButton>
-              <button className="bg-slate-900 text-white text-sm font-semibold px-6 py-2.5 rounded-full hover:bg-slate-800 transition-all shadow-sm hover:shadow-md active:scale-95 cursor-pointer">
-                Sign Up
-              </button>
-            </SignUpButton>
-          </SignedOut>
-          <SignedIn>
-            <UserButton appearance={{ elements: { avatarBox: "w-9 h-9" } }} />
-          </SignedIn>
+              {isMobileMenuOpen ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <Menu className="h-5 w-5" />
+              )}
+            </button>
+          </div>
         </div>
+
+        {isMobileMenuOpen && (
+          <div id="mobile-menu" className="md:hidden pb-4">
+            <nav className="flex flex-col gap-1">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-slate-50 hover:text-slate-900 ${
+                    isActive(link.href) ? "text-slate-900" : "text-slate-600"
+                  }`}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  {link.name}
+                </Link>
+              ))}
+            </nav>
+
+            <div className="mt-3 flex flex-col gap-2">
+              <SignedIn>
+                {isCreditsLoading && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg border border-slate-100 shadow-sm">
+                    <Coins className="w-4 h-4 text-emerald-500" />
+                    <span className="text-sm font-medium text-slate-400">Loading…</span>
+                  </div>
+                )}
+                {!isCreditsLoading && credits !== null && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg border border-slate-100 shadow-sm">
+                    <Coins className="w-4 h-4 text-emerald-500" />
+                    <span className="text-sm font-medium text-slate-700">
+                      {credits} Credits
+                    </span>
+                  </div>
+                )}
+              </SignedIn>
+              <SignedOut>
+                <SignInButton>
+                  <button className="w-full text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors px-4 py-2.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer">
+                    Sign In
+                  </button>
+                </SignInButton>
+                <SignUpButton>
+                  <button className="w-full bg-slate-900 text-white text-sm font-semibold px-6 py-2.5 rounded-lg hover:bg-slate-800 transition-all shadow-sm hover:shadow-md active:scale-[0.99] cursor-pointer">
+                    Sign Up
+                  </button>
+                </SignUpButton>
+              </SignedOut>
+            </div>
+          </div>
+        )}
       </div>
     </header>
   );
