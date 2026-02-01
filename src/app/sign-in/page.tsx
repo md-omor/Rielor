@@ -1,6 +1,16 @@
+"use client";
+
 import { SignIn } from "@clerk/nextjs";
+import { useEffect } from "react";
 
 const SignInPage = () => {
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.search) {
+      window.history.replaceState({}, "", url.pathname);
+    }
+  }, []);
+
   return (
     <div className="min-h-screen py-32 bg-slate-50 flex items-center justify-center px-4">
       <SignIn
@@ -13,7 +23,8 @@ const SignInPage = () => {
             formButtonPrimary: "bg-slate-900 hover:bg-slate-800",
           },
         }}
-        routing="hash"
+        routing="path"
+        path="/sign-in"
         signUpUrl="/sign-up"
       />
     </div>

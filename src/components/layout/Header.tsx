@@ -1,6 +1,6 @@
 "use client";
 
-import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton, useUser } from "@clerk/nextjs";
+import { SignedIn, SignedOut, UserButton, useUser } from "@clerk/nextjs";
 import { Coins, Menu, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -143,16 +143,18 @@ const Header = () => {
                 )}
               </SignedIn>
               <SignedOut>
-                <SignInButton>
-                  <button className="text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors px-4 py-2 cursor-pointer">
-                    Sign In
-                  </button>
-                </SignInButton>
-                <SignUpButton>
-                  <button className="bg-slate-900 text-white text-sm font-semibold px-6 py-2.5 rounded-full hover:bg-slate-800 transition-all shadow-sm hover:shadow-md active:scale-95 cursor-pointer">
-                    Sign Up
-                  </button>
-                </SignUpButton>
+                <Link
+                  href="/sign-in"
+                  className="text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors px-4 py-2"
+                >
+                  Sign In
+                </Link>
+                <Link
+                  href="/sign-up"
+                  className="bg-slate-900 text-white text-sm font-semibold px-6 py-2.5 rounded-full hover:bg-slate-800 transition-all shadow-sm hover:shadow-md active:scale-95"
+                >
+                  Sign Up
+                </Link>
               </SignedOut>
               <SignedIn>
                 <UserButton appearance={{ elements: { avatarBox: "w-9 h-9" } }} />
@@ -217,16 +219,18 @@ const Header = () => {
                 )}
               </SignedIn>
               <SignedOut>
-                <SignInButton>
-                  <button className="w-full text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors px-4 py-2.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer">
-                    Sign In
-                  </button>
-                </SignInButton>
-                <SignUpButton>
-                  <button className="w-full bg-slate-900 text-white text-sm font-semibold px-6 py-2.5 rounded-lg hover:bg-slate-800 transition-all shadow-sm hover:shadow-md active:scale-[0.99] cursor-pointer">
-                    Sign Up
-                  </button>
-                </SignUpButton>
+                <Link
+                  href="/sign-in"
+                  className="w-full text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors px-4 py-2.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-center"
+                >
+                  Sign In
+                </Link>
+                <Link
+                  href="/sign-up"
+                  className="w-full bg-slate-900 text-white text-sm font-semibold px-6 py-2.5 rounded-lg hover:bg-slate-800 transition-all shadow-sm hover:shadow-md active:scale-[0.99] text-center"
+                >
+                  Sign Up
+                </Link>
               </SignedOut>
             </div>
           </div>
