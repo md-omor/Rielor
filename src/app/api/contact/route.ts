@@ -25,10 +25,8 @@ export async function POST(request: Request) {
     }
 
     // Send email using Resend
-    // Note: If RESEND_API_KEY is not set or it's a trial key, 
-    // it can only send to the registered email address (programmeromor@gmail.com).
     const { data, error } = await resend.emails.send({
-      from: 'Rielor Contact <onboarding@resend.dev>',
+      from: 'Rielor Contact <contact@rielor.com>',
       to: 'programmeromor@gmail.com',
       subject: `New Contact Form Submission: ${subject}`,
       replyTo: email,
