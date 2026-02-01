@@ -1,19 +1,18 @@
 "use client";
 
-import { SignIn } from "@clerk/nextjs";
+import { SignUp } from "@clerk/nextjs";
 import { useEffect } from "react";
 
-const SignInPage = () => {
-  useEffect(() => {
+const SignUpPage = () => {
+     useEffect(() => {
     const url = new URL(window.location.href);
     if (url.search) {
       window.history.replaceState({}, "", url.pathname);
     }
   }, []);
-
   return (
     <div className="min-h-screen py-32 bg-slate-50 flex items-center justify-center px-4">
-      <SignIn
+      <SignUp
         appearance={{
           elements: {
             card: "shadow-xl shadow-slate-200/50 border border-slate-100 rounded-3xl",
@@ -24,11 +23,11 @@ const SignInPage = () => {
           },
         }}
         routing="path"
-        path="/sign-in"
-        signUpUrl="/sign-up"
+        path="/sign-up"
+        signInUrl="/sign-in"
       />
     </div>
   );
 };
 
-export default SignInPage;
+export default SignUpPage;
