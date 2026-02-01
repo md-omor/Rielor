@@ -117,7 +117,7 @@ export default function ResultPage() {
   if (!result) {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 text-center">
-        <h1 className="text-3xl font-black mb-4">No Analysis Found</h1>
+        <h1 className="text-2xl sm:text-3xl font-black mb-4">No Analysis Found</h1>
         <p className="text-slate-500 mb-8 max-w-md">We couldn't find your recent analysis data. Please start a new session.</p>
         <Link href="/upload">
           <Button size="lg">NEW ANALYSIS</Button>
@@ -130,11 +130,11 @@ export default function ResultPage() {
     <div className="min-h-screen bg-white font-zalando">
 
 
-      <main className="container mx-auto px-4 py-12 max-w-6xl">
+      <main className="container mx-auto px-4 py-8 sm:py-12 max-w-6xl">
         <DecisionHeader decision={result.decision} score={result.score} />
         
-        <div className="grid lg:grid-cols-2 gap-16 mt-16">
-          <div className="space-y-16">
+        <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 mt-10 sm:mt-16">
+          <div className="space-y-10 sm:space-y-16">
             <ScoreBreakdown breakdown={result.breakdown} />
             <div id="missing-skills-section">
               <MissingSkills skills={result.missingSkills} />
@@ -147,14 +147,14 @@ export default function ResultPage() {
             )}
           </div>
           
-          <div className="space-y-12">
+          <div className="space-y-8 sm:space-y-12">
             <RecruiterNotes notes={result.notes} />
 
-            <Card className="p-10 bg-white border border-slate-100 shadow-xl relative overflow-hidden group">
+            <Card className="p-6 sm:p-10 bg-white border border-slate-100 shadow-xl relative overflow-hidden group">
               <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 blur-3xl -mr-16 -mt-16 group-hover:bg-indigo-50/50 transition-colors"></div>
               
               <h3 className="text-xl font-black mb-4 tracking-tight text-slate-900">{actionTip?.title}</h3>
-              <p className="text-slate-500 font-medium leading-relaxed text-lg">
+              <p className="text-slate-500 font-medium leading-relaxed text-base sm:text-lg">
                 {actionTip?.message}
               </p>
             </Card>
@@ -162,13 +162,13 @@ export default function ResultPage() {
         </div>
 
         {/* Bottom CTA Section */}
-        <div className="text-center space-y-8 py-20 border-t border-slate-50">
+        <div className="text-center space-y-6 sm:space-y-8 py-12 sm:py-20 border-t border-slate-50">
           <div className="space-y-4">
-            <h2 className="text-3xl font-black text-slate-900 tracking-tight">STILL WANT TO CHECK ANOTHER?</h2>
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">STILL WANT TO CHECK ANOTHER?</h2>
             <p className="text-slate-400 font-medium">Upload a different job description or update your resume for better results.</p>
           </div>
           <Link href="/upload" className="inline-block">
-            <Button size="lg" className="px-16 py-8 text-xl rounded-2xl shadow-2xl hover:scale-105 transition-transform cursor-pointer">
+            <Button size="lg" className="px-10 py-5 sm:px-16 sm:py-8 text-base sm:text-xl rounded-2xl shadow-2xl sm:hover:scale-105 transition-transform cursor-pointer">
               NEW ANALYSIS
             </Button>
           </Link>

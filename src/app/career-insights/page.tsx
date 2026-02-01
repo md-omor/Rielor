@@ -3,7 +3,7 @@ const CareerInsightsPage = () => {
   return (
     <div className="min-h-screen bg-white font-zalando selection:bg-indigo-100">
       {/* Hero Section */}
-      <section className="relative py-28 bg-slate-900 overflow-hidden">
+      <section className="relative py-16 sm:py-28 bg-slate-900 overflow-hidden">
         {/* Abstract background effect */}
         <div className="absolute top-0 right-0 w-1/3 h-full bg-linear-to-l from-indigo-500/10 to-transparent pointer-events-none"></div>
         <div className="absolute bottom-0 left-0 w-1/2 h-1/2 bg-radial-at-bl from-indigo-500/5 to-transparent pointer-events-none"></div>
@@ -27,14 +27,14 @@ const CareerInsightsPage = () => {
      
 
       {/* Content Sections */}
-      <section className="py-24">
+      <section className="py-16 sm:py-24">
         <div className="container mx-auto px-4">
-          <div className="grid gap-32 max-w-5xl mx-auto">
+          <div className="grid gap-16 sm:gap-32 max-w-5xl mx-auto">
             
             {/* New Section: Market Pulse */}
-            <div className="grid lg:grid-cols-2 gap-20 items-center mb-10">
+            <div className="grid lg:grid-cols-2 gap-10 lg:gap-20 items-center mb-10">
               <div>
-                <h2 className="text-4xl font-black text-slate-900 mb-6 tracking-tight font-zalando">
+                <h2 className="text-3xl sm:text-4xl font-black text-slate-900 mb-6 tracking-tight font-zalando">
                   The 2024 <br /> Market Pulse
                 </h2>
                 <div className="w-20 h-1.5 bg-indigo-600 rounded-full mb-8"></div>
@@ -54,7 +54,7 @@ const CareerInsightsPage = () => {
                   ))}
                 </div>
               </div>
-              <div className="p-10 bg-indigo-50 rounded-[3rem] border border-indigo-100/50 relative overflow-hidden">
+              <div className="p-6 sm:p-10 bg-indigo-50 rounded-[3rem] border border-indigo-100/50 relative overflow-hidden">
                 <div className="absolute -top-10 -right-10 w-40 h-40 bg-indigo-200/50 rounded-full blur-3xl opacity-50"></div>
                 <h3 className="text-2xl font-black text-slate-900 mb-6 font-zalando">Insider Tip</h3>
                 <p className="text-slate-600 leading-relaxed font-medium mb-8">
@@ -71,13 +71,13 @@ const CareerInsightsPage = () => {
             </div>
 
             {/* Existing: Why JDs are Unrealistic */}
-            <div className="grid lg:grid-cols-2 gap-16 items-start">
-              <div className="sticky top-28">
-                <h2 className="text-4xl font-black text-slate-900 mb-6 tracking-tight font-zalando">
+            <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-start">
+              <div className="lg:sticky lg:top-28">
+                <h2 className="text-3xl sm:text-4xl font-black text-slate-900 mb-6 tracking-tight font-zalando">
                   Why JDs are <br /> Often Unrealistic
                 </h2>
                 <div className="w-20 h-1.5 bg-indigo-600 rounded-full mb-8"></div>
-                <p className="text-slate-600 text-lg leading-relaxed mb-8 font-medium">
+                <p className="text-slate-600 text-base sm:text-lg leading-relaxed mb-8 font-medium">
                   Most Job Descriptions (JDs) are "wish lists" rather than strict requirements. Recruiters often copy-paste from other roles or include every possible tool their team touches.
                 </p>
               </div>
@@ -88,7 +88,7 @@ const CareerInsightsPage = () => {
                   { id: "02", title: "Legacy Bloat", desc: "Requirements often include tools the team no longer uses but hasn't removed from the template." },
                   { id: "03", title: "Critical vs Secondary", desc: "The first 3-5 bullet points are usually the only ones the hiring manager actually cares about." }
                 ].map((item) => (
-                  <div key={item.id} className="group p-8 bg-white border border-slate-100 rounded-3xl shadow-sm hover:shadow-md transition-all hover:border-indigo-100">
+                  <div key={item.id} className="group p-6 sm:p-8 bg-white border border-slate-100 rounded-3xl shadow-sm hover:shadow-md transition-all hover:border-indigo-100">
                     <span className="block text-indigo-600 font-black text-2xl mb-4 font-zalando opacity-50 group-hover:opacity-100 transition-opacity">
                       {item.id}
                     </span>
@@ -101,8 +101,8 @@ const CareerInsightsPage = () => {
 
             {/* Leveling Expectations Redesign */}
             <div className="relative p-1 bg-slate-900 rounded-[3rem] overflow-hidden">
-               <div className="relative p-12 md:p-20 bg-slate-900 rounded-[2.8rem] border border-white/5">
-                <h2 className="text-4xl font-black text-white mb-12 tracking-tight font-zalando text-center">
+               <div className="relative p-8 sm:p-12 md:p-20 bg-slate-900 rounded-[2.8rem] border border-white/5">
+                <h2 className="text-3xl sm:text-4xl font-black text-white mb-10 sm:mb-12 tracking-tight font-zalando text-center">
                   Decoding <span className="text-indigo-400">Experience Levels</span>
                 </h2>
                 
@@ -133,9 +133,9 @@ const CareerInsightsPage = () => {
       
 
       {/* CTA Section */}
-      <section className="py-32 bg-slate-50 border-t border-slate-100">
+      <section className="py-16 sm:py-32 bg-slate-50 border-t border-slate-100">
         <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto rounded-[3.5rem] bg-slate-900 p-12 md:p-20 text-center relative overflow-hidden shadow-2xl">
+          <div className="max-w-4xl mx-auto rounded-[3.5rem] bg-slate-900 p-8 sm:p-12 md:p-20 text-center relative overflow-hidden shadow-2xl">
              <div className="absolute top-0 left-0 w-full h-full bg-radial-at-t from-indigo-500/20 to-transparent pointer-events-none"></div>
              
              <h2 className="text-3xl md:text-5xl font-black text-white mb-8 tracking-tight font-zalando relative">
@@ -144,7 +144,7 @@ const CareerInsightsPage = () => {
              <p className="text-slate-400 mb-12 text-lg max-w-xl mx-auto font-medium relative">
                Don't guess how you compare to the competition. Get a data-driven breakdown of your fitness for any role.
              </p>
-             <button className="relative bg-white text-slate-900 px-12 py-5 rounded-full font-black text-lg hover:bg-slate-100 transition-all shadow-xl hover:scale-105 active:scale-95 font-zalando cursor-pointer">
+             <button className="relative bg-white text-slate-900 px-8 sm:px-12 py-4 sm:py-5 rounded-full font-black text-base sm:text-lg hover:bg-slate-100 transition-all shadow-xl sm:hover:scale-105 active:scale-95 font-zalando cursor-pointer">
                Unlock My Insights
              </button>
           </div>

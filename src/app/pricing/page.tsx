@@ -6,7 +6,7 @@ import Link from "next/link";
 export default function PricingPage() {
   return (
     <div className="min-h-screen bg-white">
-      <div className="container mx-auto px-4 py-24">
+      <div className="container mx-auto px-4 py-16 sm:py-24">
         <div className="max-w-2xl mx-auto text-center mb-16">
           <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6 tracking-tight">
             Simple, Transparent Pricing
@@ -17,7 +17,7 @@ export default function PricingPage() {
         </div>
         
         <div className="max-w-md mx-auto">
-          <Card className="p-8 border-2 border-slate-900 relative overflow-hidden flex flex-col h-full" hoverable={true}>
+          <Card className="p-6 sm:p-8 border-2 border-slate-900 relative overflow-hidden flex flex-col h-full" hoverable={true}>
             <div className="absolute top-0 right-0 bg-slate-900 text-white text-xs font-bold px-3 py-1 rounded-bl-lg">
               EARLY ACCESS
             </div>
@@ -52,7 +52,7 @@ export default function PricingPage() {
             </div>
 
             <Link href="/upload" className="block mt-auto">
-               <Button variant="primary" className="w-full justify-center py-4 text-lg">
+               <Button variant="primary" className="w-full justify-center py-3 sm:py-4 text-base sm:text-lg">
                   Get Started
                </Button>
             </Link>

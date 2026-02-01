@@ -3,7 +3,7 @@ const AIAssistantPage = () => {
   return (
     <div className="min-h-screen bg-white font-zalando selection:bg-indigo-100">
       {/* Hero Section */}
-      <section className="relative py-28 bg-slate-900 overflow-hidden">
+      <section className="relative py-16 sm:py-28 bg-slate-900 overflow-hidden">
         {/* Abstract background effect */}
         <div className="absolute top-0 right-0 w-1/3 h-full bg-linear-to-l from-indigo-500/10 to-transparent pointer-events-none"></div>
         <div className="absolute bottom-0 left-0 w-1/2 h-1/2 bg-radial-at-bl from-indigo-500/5 to-transparent pointer-events-none"></div>
@@ -25,15 +25,15 @@ const AIAssistantPage = () => {
       </section>
 
       {/* Methodology Section */}
-      <section className="py-24">
+      <section className="py-16 sm:py-24">
         <div className="container mx-auto px-4">
           <div className="max-w-5xl mx-auto">
             
             {/* Four Pillars */}
-            <div className="mb-32">
-              <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6">
+            <div className="mb-16 sm:mb-32">
+              <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 sm:mb-12 gap-6">
                 <div className="max-w-xl">
-                  <h2 className="text-4xl font-black text-slate-900 mb-6 tracking-tight font-zalando">
+                  <h2 className="text-3xl sm:text-4xl font-black text-slate-900 mb-6 tracking-tight font-zalando">
                     The Four Pillars <br /> of Our Analysis
                   </h2>
                   <p className="text-slate-600 text-lg leading-relaxed font-medium">
@@ -49,7 +49,7 @@ const AIAssistantPage = () => {
                   { title: "Seniority Signal", desc: "Mapping years of experience and level of responsibility to ensure the role matches your career stage." },
                   { title: "Semantic Relevance", desc: "Understanding the context of your achievements rather than just scanning for exact word matches." }
                 ].map((pillar, i) => (
-                  <div key={i} className="group p-10 bg-white border border-slate-100 rounded-3xl shadow-sm hover:shadow-md transition-all hover:border-indigo-100 relative overflow-hidden">
+                  <div key={i} className="group p-6 sm:p-10 bg-white border border-slate-100 rounded-3xl shadow-sm hover:shadow-md transition-all hover:border-indigo-100 relative overflow-hidden">
                     <div className="absolute top-0 right-0 p-6 text-slate-50 font-black text-6xl group-hover:text-indigo-50/50 transition-colors pointer-events-none">
                       0{i+1}
                     </div>
@@ -61,15 +61,15 @@ const AIAssistantPage = () => {
             </div>
 
             {/* Anti-Hallucination Section */}
-            <div className="relative p-1 bg-slate-900 rounded-[3rem] overflow-hidden mb-32">
-               <div className="relative p-12 md:p-20 bg-slate-900 rounded-[2.8rem] border border-white/5">
+            <div className="relative p-1 bg-slate-900 rounded-[3rem] overflow-hidden mb-16 sm:mb-32">
+               <div className="relative p-8 sm:p-12 md:p-20 bg-slate-900 rounded-[2.8rem] border border-white/5">
                 <div className="absolute top-0 right-0 p-12 opacity-10 pointer-events-none">
                   <svg className="w-32 h-32 text-indigo-500" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
                   </svg>
                 </div>
                 
-                <h2 className="text-4xl font-black text-white mb-8 tracking-tight font-zalando max-w-xl">
+                <h2 className="text-3xl sm:text-4xl font-black text-white mb-8 tracking-tight font-zalando max-w-xl">
                   Built-in <span className="text-indigo-400">Accuracy</span> (Anti-Hallucination)
                 </h2>
                 <p className="text-slate-400 mb-12 text-lg leading-relaxed max-w-2xl font-medium">
@@ -100,9 +100,9 @@ const AIAssistantPage = () => {
             </div>
 
             {/* Transparency-First Section */}
-            <div className="grid lg:grid-cols-2 gap-20 items-center">
+            <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
               <div>
-                <h2 className="text-4xl font-black text-slate-900 mb-6 tracking-tight font-zalando">
+                <h2 className="text-3xl sm:text-4xl font-black text-slate-900 mb-6 tracking-tight font-zalando">
                   Transparency <br /> Above All
                 </h2>
                 <div className="w-20 h-1.5 bg-indigo-600 rounded-full mb-10"></div>
@@ -147,9 +147,9 @@ const AIAssistantPage = () => {
       </section>
 
       {/* CTA Section */}
-      <section className="py-32 bg-slate-50 border-t border-slate-100">
+      <section className="py-16 sm:py-32 bg-slate-50 border-t border-slate-100">
         <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto rounded-[3.5rem] bg-slate-900 p-12 md:p-20 text-center relative overflow-hidden shadow-2xl">
+          <div className="max-w-4xl mx-auto rounded-[3.5rem] bg-slate-900 p-8 sm:p-12 md:p-20 text-center relative overflow-hidden shadow-2xl">
              <div className="absolute top-0 left-0 w-full h-full bg-radial-at-t from-indigo-500/20 to-transparent pointer-events-none"></div>
              
              <h2 className="text-3xl md:text-5xl font-black text-white mb-8 tracking-tight font-zalando relative">
@@ -158,7 +158,7 @@ const AIAssistantPage = () => {
              <p className="text-slate-400 mb-12 text-lg max-w-xl mx-auto font-medium relative">
                Run a sample analysis to understand how our algorithms weigh your experience.
              </p>
-             <button className="relative bg-white text-slate-900 px-12 py-5 rounded-full font-black text-lg hover:bg-slate-100 transition-all shadow-xl hover:scale-105 active:scale-95 font-zalando cursor-pointer">
+             <button className="relative bg-white text-slate-900 px-8 sm:px-12 py-4 sm:py-5 rounded-full font-black text-base sm:text-lg hover:bg-slate-100 transition-all shadow-xl sm:hover:scale-105 active:scale-95 font-zalando cursor-pointer">
                Start Free Analysis
              </button>
           </div>
