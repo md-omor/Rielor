@@ -397,23 +397,26 @@ async function extractWithHeadless(url: string): Promise<{ text: string; method:
     
     if (isServerless) {
       console.log('[Universal Extractor] Serverless detected, using @sparticuz/chromium-min');
-      const chromium = (await import('@sparticuz/chromium-min')) as any;
-      const puppeteer = (await import('puppeteer-core')) as any;
+      const chromiumMod = await import('@sparticuz/chromium-min');
+      const puppeteerMod = await import('puppeteer-core');
+      
+      const chromium = (chromiumMod as any).default || chromiumMod;
+      const puppeteer = (puppeteerMod as any).default || puppeteerMod;
       
       // Points to a stable binary pack for the specified version
       const CHROMIUM_PACK_URL = 'https://github.com/Sparticuz/chromium/releases/download/v132.0.0/chromium-v132.0.0-pack.tar';
       
-      executablePath = await (chromium.default || chromium).executablePath(CHROMIUM_PACK_URL);
-      browserArgs = (chromium.default || chromium).args;
-      headless = (chromium.default || chromium).headless;
+      executablePath = await chromium.executablePath(CHROMIUM_PACK_URL);
+      browserArgs = chromium.args;
+      headless = chromium.headless as any;
       
       console.log('[Universal Extractor] Chromium executable path:', executablePath);
       
-      browser = await (puppeteer.default || puppeteer).launch({
+      browser = await puppeteer.launch({
         args: browserArgs,
         executablePath,
         headless: headless as any,
-        defaultViewport: (chromium.default || chromium).defaultViewport,
+        defaultViewport: chromium.defaultViewport,
       });
     } else {
       console.log('[Universal Extractor] Local environment detected, using local Playwright Chromium');
