@@ -10,12 +10,16 @@ export type AISkillUnderstanding = {
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
+const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY || "";
 
 const FIXED_GEMINI_PROMPT =
-  "You are extracting structured career information.\n\nInput:\n- Resume text\n- Job description\n\nYour task:\n1. List explicit skills mentioned in the resume\n2. Infer likely skills ONLY if they are industry-obvious and high confidence\n3. Identify role and seniority\n4. Estimate years of experience ONLY if stated\n\nRules:\n- Do not invent skills\n- Do not assume advanced tools\n- Prefer under-inference to over-inference\n- Normalize skills to lowercase, dash-separated tokens\n- Output valid JSON only, no explanations\n\nOutput schema:\n{\n  explicitSkills: [],\n  likelySkills: [],\n  role: \"\",\n  seniority: \"\",\n  experienceYears: number | null\n}";
+  'You are extracting structured career information.\n\nInput:\n- Resume text\n- Job description\n\nYour task:\n1. List explicit skills mentioned in the resume\n2. Infer likely skills ONLY if they are industry-obvious and high confidence\n3. Identify role and seniority\n4. Estimate years of experience ONLY if stated\n\nRules:\n- Do not invent skills\n- Do not assume advanced tools\n- Prefer under-inference to over-inference\n- Normalize skills to lowercase, dash-separated tokens\n- Output valid JSON only, no explanations\n\nOutput schema:\n{\n  explicitSkills: [],\n  likelySkills: [],\n  role: "",\n  seniority: "",\n  experienceYears: number | null\n}';
 
 function cleanJSON(text: string): string {
-  return text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+  return text
+    .replace(/```json\s*/gi, "")
+    .replace(/```\s*/g, "")
+    .trim();
 }
 
 function tryParseJSONObject(text: string): unknown {
@@ -54,7 +58,12 @@ function asStringArray(value: unknown): string[] {
 }
 
 function asSeniority(value: unknown): Seniority {
-  if (value === "junior" || value === "mid" || value === "senior" || value === "unknown") {
+  if (
+    value === "junior" ||
+    value === "mid" ||
+    value === "senior" ||
+    value === "unknown"
+  ) {
     return value;
   }
   return "unknown";
@@ -71,12 +80,17 @@ function validateSkillUnderstanding(payload: unknown): AISkillUnderstanding {
   const likelySkills = asStringArray(obj.likelySkills);
 
   const role = typeof obj.role === "string" ? obj.role.trim() : "";
-  const seniority = asSeniority(typeof obj.seniority === "string" ? obj.seniority.trim() : obj.seniority);
+  const seniority = asSeniority(
+    typeof obj.seniority === "string" ? obj.seniority.trim() : obj.seniority,
+  );
 
   let experienceYears: number | null = null;
   if (obj.experienceYears === null) {
     experienceYears = null;
-  } else if (typeof obj.experienceYears === "number" && Number.isFinite(obj.experienceYears)) {
+  } else if (
+    typeof obj.experienceYears === "number" &&
+    Number.isFinite(obj.experienceYears)
+  ) {
     experienceYears = obj.experienceYears;
   }
 
@@ -101,7 +115,11 @@ async function callGeminiJSON(prompt: string): Promise<string> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0 },
+      generationConfig: {
+        temperature: 0,
+        topK: 1,
+        topP: 1,
+      },
     }),
   });
 
@@ -129,12 +147,14 @@ async function callGroqJSON(prompt: string): Promise<string> {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${GROQ_API_KEY}`,
+      Authorization: `Bearer ${GROQ_API_KEY}`,
     },
     body: JSON.stringify({
       model: "llama-3.3-70b-versatile",
       messages: [{ role: "user", content: prompt }],
       temperature: 0,
+      top_p: 1,
+      seed: 42,
       response_format: { type: "json_object" },
     }),
   });
@@ -152,6 +172,53 @@ async function callGroqJSON(prompt: string): Promise<string> {
   return text;
 }
 
+async function callHuggingFaceJSON(prompt: string): Promise<string> {
+  if (!HUGGINGFACE_API_KEY) {
+    throw new Error("Missing HUGGINGFACE_API_KEY");
+  }
+
+  const url = "https://router.huggingface.co/v1/chat/completions";
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${HUGGINGFACE_API_KEY}`,
+      "X-Wait-For-Model": "true",
+    },
+    body: JSON.stringify({
+      model: "mistralai/Mistral-7B-Instruct-v0.2",
+      messages: [
+        {
+          role: "system",
+          content: "Return ONLY valid JSON, no markdown or extra text.",
+        },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0,
+      top_p: 1,
+      max_tokens: 2000,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`HuggingFace API Error (${response.status}): ${err}`);
+  }
+
+  const data = (await response.json()) as any;
+
+  const text =
+    data?.choices?.[0]?.message?.content ??
+    data?.choices?.[0]?.text ??
+    data?.generated_text;
+  if (typeof text === "string" && text.trim()) {
+    return text;
+  }
+
+  throw new Error("HuggingFace response missing text");
+}
+
 function buildPrompt(resumeText: string, jobDescriptionText: string): string {
   return (
     `${FIXED_GEMINI_PROMPT}` +
@@ -160,8 +227,18 @@ function buildPrompt(resumeText: string, jobDescriptionText: string): string {
   );
 }
 
-async function runProvider(provider: "gemini" | "groq", prompt: string): Promise<AISkillUnderstanding> {
-  const raw = provider === "gemini" ? await callGeminiJSON(prompt) : await callGroqJSON(prompt);
+async function runProvider(
+  provider: "gemini" | "groq" | "huggingface",
+  prompt: string,
+): Promise<AISkillUnderstanding> {
+  let raw: string;
+  if (provider === "gemini") {
+    raw = await callGeminiJSON(prompt);
+  } else if (provider === "groq") {
+    raw = await callGroqJSON(prompt);
+  } else {
+    raw = await callHuggingFaceJSON(prompt);
+  }
   const parsed = tryParseJSONObject(raw);
   return validateSkillUnderstanding(parsed);
 }
@@ -175,19 +252,40 @@ export async function understandSkillsWithGemini(input: {
 
   const prompt = buildPrompt(resumeText, jobDescriptionText);
 
-  // Primary: Gemini
-  try {
+  // Primary: Gemini (best free option)
+  if (GEMINI_API_KEY) {
+    try {
+      return await runProvider("gemini", prompt);
+    } catch (geminiError: any) {
+      console.warn(
+        "Gemini failed in skill understanding:",
+        geminiError.message,
+      );
+    }
+  }
 
-    
-    return await runProvider("gemini", prompt);
-  } catch (geminiError: any) {
-    // Fallback: Groq (retry once using fallback provider)
+  // Fallback 1: Groq
+  if (GROQ_API_KEY) {
     try {
       return await runProvider("groq", prompt);
     } catch (groqError: any) {
-      const g1 = geminiError?.message ? String(geminiError.message) : String(geminiError);
-      const g2 = groqError?.message ? String(groqError.message) : String(groqError);
-      throw new Error(`All LLM providers failed. Gemini: ${g1}; Groq: ${g2}`);
+      console.warn("Groq failed in skill understanding:", groqError.message);
     }
   }
+
+  // Fallback 2: HuggingFace (last resort)
+  if (HUGGINGFACE_API_KEY) {
+    try {
+      return await runProvider("huggingface", prompt);
+    } catch (hfError: any) {
+      console.warn(
+        "HuggingFace failed in skill understanding:",
+        hfError.message,
+      );
+    }
+  }
+
+  throw new Error(
+    "All AI providers failed for skill understanding. Please add at least one API key (GEMINI_API_KEY, HUGGINGFACE_API_KEY, or GROQ_API_KEY)",
+  );
 }
