@@ -1,14 +1,20 @@
-import { AnalysisBreakdown, CandidateProfile, JobRequirements, ScoreWithStatus, normalizeSkill } from "@/types/analysis";
+import {
+    AnalysisBreakdown,
+    CandidateProfile,
+    JobRequirements,
+    ScoreWithStatus,
+    normalizeSkill,
+} from "@/types/analysis";
 
 // Education Level Ranks for comparison
 const EDUCATION_RANKS: Record<string, number> = {
-  "phd": 5,
-  "master": 4,
-  "bachelor": 3,
-  "associate": 2,
-  "highschool": 1,
-  "none": 0,
-  "unknown": 0
+  phd: 5,
+  master: 4,
+  bachelor: 3,
+  associate: 2,
+  highschool: 1,
+  none: 0,
+  unknown: 0,
 };
 
 function getTrigrams(s: string): Set<string> {
@@ -59,17 +65,23 @@ function fuzzyKeyMatch(a: string, b: string): boolean {
   if (a === b) return true;
 
   const minLen = Math.min(a.length, b.length);
-  if (minLen >= 4 && (a.includes(b) || b.includes(a))) return true;
 
-  if (minLen >= 5) {
-    const dist = levenshteinDistance(a, b);
-    const ratio = 1 - dist / Math.max(a.length, b.length);
-    if (ratio >= 0.85) return true;
+  // Balanced substring match for meaningful terms
+  if (minLen >= 5 && (a.includes(b) || b.includes(a))) {
+    return true;
   }
 
+  // Balanced edit distance: require 90% similarity
+  if (minLen >= 4) {
+    const dist = levenshteinDistance(a, b);
+    const ratio = 1 - dist / Math.max(a.length, b.length);
+    if (ratio >= 0.9) return true;
+  }
+
+  // Balanced trigram: require 40% similarity for longer terms
   if (minLen >= 8) {
     const tri = trigramSimilarity(a, b);
-    if (tri >= 0.35) return true;
+    if (tri >= 0.4) return true;
   }
 
   return false;
@@ -100,7 +112,9 @@ function normalizeForPhrase(text: string): string {
 function buildResumeEvidenceIndex(resumeText: string): ResumeEvidenceIndex {
   const normalized = normalizeForPhrase(resumeText);
   const key = normalized.replace(/\s+/g, "");
-  const tokens = new Set<string>((normalized.match(/[a-z0-9+#]+/g) || []).filter(Boolean));
+  const tokens = new Set<string>(
+    (normalized.match(/[a-z0-9+#]+/g) || []).filter(Boolean),
+  );
   return { key, normalized, tokens };
 }
 
@@ -113,21 +127,35 @@ function acronymForLabel(label: string): string {
   if (!spaced) return "";
   const words = spaced.split(" ").filter(Boolean);
   if (words.length < 2) return "";
-  const ac = words.map((w) => w[0]).join("").toLowerCase();
+  const ac = words
+    .map((w) => w[0])
+    .join("")
+    .toLowerCase();
   return ac.length >= 2 ? ac : "";
 }
 
-function hasResumeEvidence(resume: ResumeEvidenceIndex, skillLabel: string, skillKey: string): boolean {
+function hasResumeEvidence(
+  resume: ResumeEvidenceIndex,
+  skillLabel: string,
+  skillKey: string,
+): boolean {
   // WHY: missingSkills must reflect explicit resume evidence (including common acronyms), across all job fields.
   if (!resume) return false;
 
   const phrase = normalizeForPhrase(skillLabel);
-  if (phrase && resume.normalized.includes(phrase)) return true;
+  // Check for phrase in resume text
+  if (phrase && phrase.length >= 3) {
+    if (resume.normalized.includes(phrase)) return true;
+  }
 
-  if (skillKey && skillKey.length >= 3 && resume.key.includes(skillKey)) return true;
+  // Check for key match
+  if (skillKey && skillKey.length >= 4 && resume.key.includes(skillKey)) {
+    return true;
+  }
 
+  // Check acronym match
   const ac = acronymForLabel(skillLabel);
-  if (ac && resume.tokens.has(ac)) return true;
+  if (ac && ac.length >= 2 && resume.tokens.has(ac)) return true;
 
   return false;
 }
@@ -154,9 +182,12 @@ function getEducationRank(level: string | null): number {
   const l = level.toLowerCase();
   if (l.includes("phd") || l.includes("doctorate")) return EDUCATION_RANKS.phd;
   if (l.includes("master")) return EDUCATION_RANKS.master;
-  if (l.includes("bachelor") || l.includes("bsc") || l.includes("b.sc")) return EDUCATION_RANKS.bachelor;
-  if (l.includes("associate") || l.includes("diploma")) return EDUCATION_RANKS.associate;
-  if (l.includes("high school") || l.includes("hsc")) return EDUCATION_RANKS.highschool;
+  if (l.includes("bachelor") || l.includes("bsc") || l.includes("b.sc"))
+    return EDUCATION_RANKS.bachelor;
+  if (l.includes("associate") || l.includes("diploma"))
+    return EDUCATION_RANKS.associate;
+  if (l.includes("high school") || l.includes("hsc"))
+    return EDUCATION_RANKS.highschool;
   return 0;
 }
 
@@ -164,20 +195,31 @@ export function matchJobWithCandidate(
   job: JobRequirements,
   candidate: CandidateProfile,
   likelySkills: string[] = [], // Industry-obvious skills inferred by AI
-  resumeText: string = ""
-): { breakdown: AnalysisBreakdown; missingSkills: string[]; impliedSkills: string[]; notes: string[] } {
+  resumeText: string = "",
+): {
+  breakdown: AnalysisBreakdown;
+  missingSkills: string[];
+  impliedSkills: string[];
+  notes: string[];
+} {
   const missingSkills: string[] = [];
   const impliedSkills: string[] = [];
   const notes: string[] = [];
 
   // 1. Mandatory Normalization
   const safeCandidateSkills = [
-    ...(Array.isArray(candidate.skills?.primary) ? candidate.skills.primary : []),
-    ...(Array.isArray(candidate.skills?.secondary) ? candidate.skills.secondary : []),
+    ...(Array.isArray(candidate.skills?.primary)
+      ? candidate.skills.primary
+      : []),
+    ...(Array.isArray(candidate.skills?.secondary)
+      ? candidate.skills.secondary
+      : []),
     ...(Array.isArray(candidate.skills?.tools) ? candidate.skills.tools : []),
   ].filter((s): s is string => typeof s === "string" && s.trim().length > 0);
 
-  const candSkillKeys = new Set(safeCandidateSkills.map((s) => normalizeSkill(s).key));
+  const candSkillKeys = new Set(
+    safeCandidateSkills.map((s) => normalizeSkill(s).key),
+  );
   const candKeyList = Array.from(candSkillKeys);
 
   const likelyKeys = new Set(likelySkills.map((s) => normalizeSkill(s).key));
@@ -187,27 +229,34 @@ export function matchJobWithCandidate(
   // Hardcoded skill inference removed - now handled by AI baseline normalizer
 
   // 4. REQUIRED SKILLS MATCHING
-  let requiredSkillsScore = 100; // Default if none required
+  let requiredSkillsScore = 0; // Default to 0 if none required/found (assume extraction failure)
   let isHardCapped = false;
   let jobRealityScore = 100;
-  
-  const reqSkillsWithMeta = (Array.isArray(job.requirements?.requiredSkills) ? job.requirements.requiredSkills : [])
+
+  const reqSkillsWithMeta = (
+    Array.isArray(job.requirements?.requiredSkills)
+      ? job.requirements.requiredSkills
+      : []
+  )
     .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
     .map(normalizeSkill);
-  
+
   if (reqSkillsWithMeta.length > 0) {
     const matched = reqSkillsWithMeta.filter(
-      (s) => candSkillKeys.has(s.key) || hasSkillKey(candKeyList, s.key) || hasResumeEvidence(resumeEvidence, s.label, s.key)
+      (s) =>
+        candSkillKeys.has(s.key) ||
+        hasSkillKey(candKeyList, s.key) ||
+        hasResumeEvidence(resumeEvidence, s.label, s.key),
     );
-    
+
     // WHY: likelySkills are display-only; they must not change missingSkills or scoring.
 
-    reqSkillsWithMeta.forEach(skill => {
+    reqSkillsWithMeta.forEach((skill) => {
       const isMatched =
         candSkillKeys.has(skill.key) ||
         hasSkillKey(candKeyList, skill.key) ||
         hasResumeEvidence(resumeEvidence, skill.label, skill.key);
-        
+
       if (!isMatched) {
         if (likelyKeys.has(skill.key)) {
           addImpliedSkill(impliedSkills, skill.label);
@@ -219,7 +268,7 @@ export function matchJobWithCandidate(
 
     // Task A: Required Skills Consistency
     // requiredSkills score must be derived from the SAME list used for missingSkills
-    
+
     const matchRatio = matched.length / reqSkillsWithMeta.length;
     requiredSkillsScore = Math.round(matchRatio * 100);
 
@@ -227,13 +276,15 @@ export function matchJobWithCandidate(
     if (requiredSkillsScore === 0 && reqSkillsWithMeta.length > 0) {
       requiredSkillsScore = minNonZeroPercentStep(30);
     }
-    
+
     // Task 1: Required Skills Consistency (Refinement)
     // Removed floor override. If 0 matched, score is 0.
 
     if (matchRatio < 0.5) {
       isHardCapped = true;
-      notes.push("Job Reality: Missing more than 50% of required skills. Final score capped at 49.");
+      notes.push(
+        "Job Reality: Missing more than 50% of required skills. Final score capped at 49.",
+      );
     }
 
     // Task B: Fix Job Reality vs Hard Cap Consistency (Refinement)
@@ -245,60 +296,86 @@ export function matchJobWithCandidate(
     }
 
     if (missingSkills.length > 0) {
-      notes.push(`Missing ${missingSkills.length} required skill${missingSkills.length > 1 ? 's' : ''}`);
+      notes.push(
+        `Missing ${missingSkills.length} required skill${missingSkills.length > 1 ? "s" : ""}`,
+      );
     }
-    
+
     if (impliedSkills.length > 0) {
-      notes.push(`Implied ${impliedSkills.length} skill${impliedSkills.length > 1 ? 's' : ''} based on your profile.`);
+      notes.push(
+        `Implied ${impliedSkills.length} skill${impliedSkills.length > 1 ? "s" : ""} based on your profile.`,
+      );
     }
   }
 
   // 5. PREFERRED SKILLS MATCHING
-  let preferredSkillsScore = 100;
-  const prefSkillsWithMeta = (Array.isArray(job.requirements?.preferredSkills) ? job.requirements.preferredSkills : [])
+  let preferredSkillsScore = 0;
+  const prefSkillsWithMeta = (
+    Array.isArray(job.requirements?.preferredSkills)
+      ? job.requirements.preferredSkills
+      : []
+  )
     .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
     .map(normalizeSkill);
   if (prefSkillsWithMeta.length > 0) {
-      const matched = prefSkillsWithMeta.filter(s => candSkillKeys.has(s.key) || hasSkillKey(candKeyList, s.key));
-      preferredSkillsScore = Math.round((matched.length / prefSkillsWithMeta.length) * 100);
+    const matched = prefSkillsWithMeta.filter(
+      (s) => candSkillKeys.has(s.key) || hasSkillKey(candKeyList, s.key),
+    );
+    preferredSkillsScore = Math.round(
+      (matched.length / prefSkillsWithMeta.length) * 100,
+    );
   }
 
   // 6. TOOLS MATCHING
-  let toolsScore = 100;
-  const targetToolsWithMeta = (Array.isArray(job.requirements?.tools) ? job.requirements.tools : [])
+  let toolsScore = 0;
+  const targetToolsWithMeta = (
+    Array.isArray(job.requirements?.tools) ? job.requirements.tools : []
+  )
     .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
     .map(normalizeSkill);
   if (targetToolsWithMeta.length > 0) {
-      const matched = targetToolsWithMeta.filter(s => candSkillKeys.has(s.key) || hasSkillKey(candKeyList, s.key));
-      toolsScore = Math.round((matched.length / targetToolsWithMeta.length) * 100);
+    const matched = targetToolsWithMeta.filter(
+      (s) => candSkillKeys.has(s.key) || hasSkillKey(candKeyList, s.key),
+    );
+    toolsScore = Math.round(
+      (matched.length / targetToolsWithMeta.length) * 100,
+    );
   }
 
   // 7. EXPERIENCE SCORING
-  let experienceScore = 100;
+  let experienceScore = 0;
   const candidateYears = candidate.experience.totalYears;
   const minYears = job.requirements.minimumExperienceYears || 0;
-  
+
   if (minYears > 0) {
     if (candidateYears >= minYears) {
       experienceScore = 100;
     } else {
       const ratio = candidateYears / minYears;
       experienceScore = Math.round(ratio * 100);
-      notes.push(`Experience Gap: Candidate has ${candidateYears} years, but ${minYears} required.`);
+      notes.push(
+        `Experience Gap: Candidate has ${candidateYears} years, but ${minYears} required.`,
+      );
     }
   }
 
   // Keep breakdown logically consistent: if job is hard-capped due to missing required skills,
   // and there is an experience gap, do not allow experience to remain higher than job reality.
-  if (isHardCapped && experienceScore < 100 && experienceScore > requiredSkillsScore) {
+  if (
+    isHardCapped &&
+    experienceScore < 100 &&
+    experienceScore > requiredSkillsScore
+  ) {
     experienceScore = requiredSkillsScore;
-    notes.push("Hard Cap: Experience score dampened due to missing required skills.");
+    notes.push(
+      "Hard Cap: Experience score dampened due to missing required skills.",
+    );
   }
 
   // 8. EDUCATION SCORING (NO NULLS RULE)
   // Task D: Fix Education Status
   // If no education required, score should not be 100
-  let education: ScoreWithStatus = { score: 0, status: "NOT_REQUIRED" }; 
+  let education: ScoreWithStatus = { score: 0, status: "NOT_REQUIRED" };
   const jobEduRank = getEducationRank(job.requirements.educationLevel);
   const candEduRank = getEducationRank(candidate.education.highestLevel);
 
@@ -308,21 +385,25 @@ export function matchJobWithCandidate(
     } else if (candEduRank > 0) {
       const eduRatio = candEduRank / jobEduRank;
       education = { score: Math.round(eduRatio * 100), status: "PARTIAL" };
-      notes.push(`Education Gap: Level (${candidate.education.highestLevel}) is lower than required.`);
+      notes.push(
+        `Education Gap: Level (${candidate.education.highestLevel}) is lower than required.`,
+      );
     } else {
       // Task 4: Fix Education Status Semantics
       // Instead of 0/MISSING, give a small partial score to avoid "automatic rejection" feel
       education = { score: 25, status: "PARTIAL" };
-      notes.push(`Education Gap: No formal education listed, but checked against requirement.`);
+      notes.push(
+        `Education Gap: No formal education listed, but checked against requirement.`,
+      );
     }
   }
 
   // 9. ELIGIBILITY SCORING (NO NULLS RULE)
   // WHY: NOT_EVALUATED is not a failure; score is a non-penalizing placeholder.
   let eligibility: ScoreWithStatus = { score: 0, status: "NOT_EVALUATED" };
-  
+
   // Rule (Task D): If education requirements exist but are not strictly enforced: eligibility.status = "NOT_EVALUATED"
-  // We prioritize the Visa/Remote evaluation if it leads to PARTIAL or MATCHED, 
+  // We prioritize the Visa/Remote evaluation if it leads to PARTIAL or MATCHED,
   // but if education exists, we default back to NOT_EVALUATED to satisfy the requirement
   // that eligibility should not be marked NOT_REQUIRED or definitively MATCHED if education is a factor.
 
@@ -339,7 +420,9 @@ export function matchJobWithCandidate(
   }
 
   if (eligibility.status === "NOT_EVALUATED") {
-    notes.push("Eligibility: Not evaluated for this role; 0% is a placeholder and does not affect your final score.");
+    notes.push(
+      "Eligibility: Not evaluated for this role; 0% is a placeholder and does not affect your final score.",
+    );
   }
 
   return {
@@ -352,7 +435,7 @@ export function matchJobWithCandidate(
       eligibility,
       jobReality: jobRealityScore,
       competition: 0,
-      isHardCapped
+      isHardCapped,
     },
     missingSkills,
     impliedSkills,
