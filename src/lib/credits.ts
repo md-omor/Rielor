@@ -134,12 +134,16 @@ export async function hasCredits(userId: string): Promise<boolean> {
 /**
  * Deducts 1 credit from the user's account
  */
-export async function deductCredit(userId: string): Promise<{ success: boolean; error?: string }> {
+export async function deductCredit(userId: string): Promise<{
+  success: boolean;
+  creditsRemaining?: number;
+  error?: string;
+}> {
   const users = await getUsersCollection();
 
   await getOrCreateUser(userId);
 
-  const res = await users.updateOne(
+  const res = (await users.findOneAndUpdate(
     {
       userId,
       creditsRemaining: { $gt: 0 },
@@ -150,12 +154,35 @@ export async function deductCredit(userId: string): Promise<{ success: boolean; 
         creditsUsed: 1,
       },
       $set: { updatedAt: new Date() },
-    }
-  );
+    },
+    { returnDocument: "after" },
+  )) as any;
 
-  if (res.modifiedCount === 0) {
-    return { success: false, error: "NO_CREDITS" };
+  const updated = res?.value ?? res ?? null;
+  if (!updated) {
+    return { success: false, error: "INSUFFICIENT_CREDITS" };
   }
 
-  return { success: true };
+  return {
+    success: true,
+    creditsRemaining: updated.creditsRemaining,
+  };
+}
+
+export async function refundCredit(userId: string): Promise<void> {
+  const users = await getUsersCollection();
+
+  await users.updateOne(
+    {
+      userId,
+      creditsUsed: { $gt: 0 },
+    },
+    {
+      $inc: {
+        creditsRemaining: 1,
+        creditsUsed: -1,
+      },
+      $set: { updatedAt: new Date() },
+    },
+  );
 }
