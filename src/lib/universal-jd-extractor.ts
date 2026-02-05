@@ -383,114 +383,96 @@ function hasScriptTags(html: string): boolean {
  * Supports both local development and serverless environments (Vercel)
  * Uses Puppeteer + @sparticuz/chromium-min for stability on Vercel
  */
+/**
+ * Renders page with headless browser and extracts content
+ * Supports both local development and serverless environments (Vercel)
+ * FALLBACK: If local browser fails (common on Vercel), uses Jina.ai Reader (Free)
+ */
 async function extractWithHeadless(url: string): Promise<{ text: string; method: string } | null> {
+  // Strategy 1: Local Serverless Browser (Playwright + @sparticuz/chromium)
   let browser;
   try {
-    console.log('[Universal Extractor] Launching headless browser...');
-    
-    // Detect serverless environment (Vercel, AWS Lambda, etc.)
+    console.log('[Universal Extractor] Attempting local browser extraction...');
     const isServerless = process.env.VERCEL === '1' || process.env.AWS_LAMBDA_FUNCTION_NAME !== undefined;
     
-    let executablePath: string | undefined;
-    let browserArgs: string[];
-    let headless: any = true;
-    
     if (isServerless) {
-      console.log('[Universal Extractor] Serverless detected, using @sparticuz/chromium-min');
+      const chromium = (await import('@sparticuz/chromium')).default;
+      const { chromium: playwright } = await import('playwright-core');
       
-      // Points to a stable binary pack for the specified version
-      const CHROMIUM_PACK_URL = 'https://github.com/Sparticuz/chromium/releases/download/v132.0.0/chromium-v132.0.0-pack.tar';
-      
-      // Use dynamic imports to prevent bundling issues
-      const [chromium, puppeteer] = await Promise.all([
-        import('@sparticuz/chromium-min').then(m => m.default || m),
-        import('puppeteer-core').then(m => m.default || m)
-      ]);
-      
-      console.log('[Universal Extractor] Packages imported, fetching executable path...');
-      executablePath = await (chromium as any).executablePath(CHROMIUM_PACK_URL);
-      browserArgs = (chromium as any).args;
-      headless = (chromium as any).headless;
-      
-      console.log('[Universal Extractor] Launching Puppeteer with executable:', executablePath);
-      
-      browser = await (puppeteer as any).launch({
-        args: browserArgs,
-        executablePath,
-        headless: headless,
-        defaultViewport: (chromium as any).defaultViewport,
+      browser = await playwright.launch({
+        args: chromium.args,
+        executablePath: await chromium.executablePath(),
+        headless: !!chromium.headless,
       });
     } else {
-      console.log('[Universal Extractor] Local environment detected, using local Playwright Chromium');
-      const { chromium: playwrightChromium } = await import('playwright-core');
-      browser = await playwrightChromium.launch({
+      const { chromium: playwright } = await import('playwright-core');
+      browser = await playwright.launch({
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
       });
     }
     
-    console.log('[Universal Extractor] Browser launched successfully');
-
-    const page = await browser.newPage();
-    const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
-
-    // Set User Agent differently based on browser type
-    if (isServerless) {
-      await (page as any).setUserAgent(userAgent);
-    } else {
-      // Playwright's newPage doesn't take UA as easily after launch, 
-      // but we can set it via extra headers or context (local use only anyway)
-    }
-
-    // Resource blocking (speed/memory)
-    if (isServerless) {
-      const puppeteerPage = page as any;
-      await puppeteerPage.setRequestInterception(true);
-      puppeteerPage.on('request', (req: any) => {
-        if (['image', 'media', 'font', 'stylesheet'].includes(req.resourceType())) {
-          req.abort();
-        } else {
-          req.continue();
-        }
-      });
-    } else {
-      const playwrightPage = page as any;
-      await playwrightPage.route('**/*', (route: any) => {
-        if (['image', 'media', 'font', 'stylesheet'].includes(route.request().resourceType())) {
-          route.abort();
-        } else {
-          route.continue();
-        }
-      });
-    }
-
-    console.log('[Universal Extractor] Navigating to:', url);
-    await page.goto(url, { 
-      waitUntil: 'domcontentloaded', 
-      timeout: FETCH_TIMEOUT_MS 
+    const context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    });
+    const page = await context.newPage();
+    
+    // Resource blocking
+    await page.route('**/*', (route) => {
+      if (['image', 'media', 'font', 'stylesheet'].includes(route.request().resourceType())) {
+        route.abort();
+      } else {
+        route.continue();
+      }
     });
 
-    // Wait for dynamic content
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10000 });
+    await page.waitForTimeout(1000);
     const html = await page.content();
-    console.log('[Universal Extractor] Content extracted, length:', html.length);
-    
     await browser.close();
 
     const result = extractWithCheerio(html);
-    if (result) {
-      return { text: result.text, method: `headless-${result.method}` };
-    }
-
-    return null;
-  } catch (error: any) {
-    console.error('[Universal Extractor] Headless browser error:', error?.message || error);
-    if (browser) {
-      try { await browser.close(); } catch (e) {}
-    }
-    return null;
+    if (result) return { text: result.text, method: `headless-browser-${result.method}` };
+  } catch (browserError: any) {
+    console.warn('[Universal Extractor] Browser extraction failed, falling back to proxy:', browserError?.message);
+    if (browser) try { await browser.close(); } catch (e) {}
   }
+
+  // Strategy 2: Proxy Fallback (Jina.ai Reader - FREE, NO KEY NEEDED)
+  // This is the "Never Fail" insurance for MVP on Vercel
+  try {
+    console.log(`[Universal Extractor] Attempting proxy extraction for: ${url}`);
+    const proxyUrl = `https://r.jina.ai/${url}`;
+    const response = await fetch(proxyUrl, {
+      headers: {
+        'Accept': 'application/json',
+        'X-Return-Format': 'markdown'
+      }
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const text = data.data?.content || data.data?.text || '';
+      if (text.length > 100) {
+        console.log('[Universal Extractor] ✓ Extraction success via Jina Reader proxy');
+        return { text: cleanText(text), method: 'proxy-jina' };
+      }
+    }
+    
+    // Last ditch: Get raw markdown if JSON fails
+    const rawResponse = await fetch(proxyUrl);
+    if (rawResponse.ok) {
+        const text = await rawResponse.text();
+        if (text.length > 200) {
+            console.log('[Universal Extractor] ✓ Extraction success via Jina Reader raw');
+            return { text: cleanText(text), method: 'proxy-jina-raw' };
+        }
+    }
+  } catch (proxyError: any) {
+    console.error('[Universal Extractor] Proxy extraction failed:', proxyError?.message);
+  }
+
+  return null;
 }
 
 // ============================================================================
