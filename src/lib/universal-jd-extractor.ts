@@ -412,7 +412,7 @@ async function extractWithHeadless(url: string): Promise<{ text: string; method:
       browser = await playwright.launch({
         args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
         executablePath: executablePath,
-        headless: chromium.headless as any,
+        headless: !!chromium.headless,
       });
     } else {
       const { chromium: playwright } = await import('playwright-core');
@@ -440,7 +440,12 @@ async function extractWithHeadless(url: string): Promise<{ text: string; method:
     });
 
     console.log('[Universal Extractor] Navigating to:', url);
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    
+    // Add a randomized delay to appear more human
+    const delay = Math.floor(Math.random() * 2000) + 1000;
+    await new Promise(resolve => setTimeout(resolve, delay));
+    
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
     
     // Wait for content (Indeed uses dynamic rendering)
     await page.waitForTimeout(2500);
@@ -478,7 +483,12 @@ async function extractWithHeadless(url: string): Promise<{ text: string; method:
       const text = data.data?.content || data.data?.text || '';
       
       // Check for security check pages
-      const isSecurityCheck = text.includes('Challenge') || text.includes('Security Check') || text.includes('verify you are a human');
+      const isSecurityCheck = 
+        text.includes('Challenge') || 
+        text.includes('Security Check') || 
+        text.includes('verify you are a human') ||
+        text.includes('Access Denied') ||
+        text.includes('Cloudflare');
       
       if (text.length > 200 && !isSecurityCheck) {
         console.log('[Universal Extractor] ✓ Success via Jina Reader proxy');
