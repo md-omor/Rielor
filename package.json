@@ -13,7 +13,7 @@
     "@clerk/nextjs": "^6.36.10",
     "@google/generative-ai": "^0.24.1",
     "@napi-rs/canvas": "^0.1.76",
-    "@sparticuz/chromium": "^143.0.4",
+    "@sparticuz/chromium": "^132.0.0",
     "@vercel/analytics": "^1.6.1",
     "cheerio": "^1.2.0",
     "crypto": "^1.0.1",
