@@ -383,6 +383,9 @@ async function extractWithHeadless(url: string): Promise<{ text: string; method:
   let browser;
   try {
     console.log('[Universal Extractor] Launching headless browser...');
+    console.log('[Universal Extractor] Platform:', process.platform);
+    console.log('[Universal Extractor] ENV - VERCEL:', process.env.VERCEL);
+    console.log('[Universal Extractor] ENV - AWS_LAMBDA:', process.env.AWS_LAMBDA_FUNCTION_NAME);
     
     // Detect serverless environment (Vercel, AWS Lambda, etc.)
     const isServerless = process.env.VERCEL === '1' || 
@@ -390,28 +393,28 @@ async function extractWithHeadless(url: string): Promise<{ text: string; method:
     
     let executablePath: string | undefined;
     let browserArgs: string[];
+    let headlessFlag: boolean = true;
     
     if (isServerless) {
       console.log('[Universal Extractor] Serverless environment detected, using @sparticuz/chromium');
       try {
+        console.log('[Universal Extractor] Attempting to import @sparticuz/chromium...');
         // Dynamic import to avoid bundling issues in client-side code
         const chromiumPkg = await import('@sparticuz/chromium');
+        console.log('[Universal Extractor] @sparticuz/chromium imported successfully');
+        
+        console.log('[Universal Extractor] Getting executable path and recommended configuration...');
         executablePath = await chromiumPkg.default.executablePath();
+        browserArgs = chromiumPkg.default.args;
+        headlessFlag = !!chromiumPkg.default.headless;
+        
         console.log('[Universal Extractor] Chromium executable path:', executablePath);
+        console.log('[Universal Extractor] Recommended args count:', browserArgs?.length || 0);
       } catch (importError: any) {
-        console.error('[Universal Extractor] Failed to import @sparticuz/chromium:', importError?.message);
-        throw new Error('Serverless browser setup failed');
+        console.error('[Universal Extractor] Failed to import or setup @sparticuz/chromium:', importError?.message);
+        console.error('[Universal Extractor] Error stack:', importError?.stack);
+        throw new Error('Serverless browser setup failed: ' + importError?.message);
       }
-      
-      // Aggressive args for serverless (memory/performance optimization)
-      browserArgs = [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--single-process',
-        '--no-zygote',
-      ];
     } else {
       console.log('[Universal Extractor] Local environment detected, using local Chromium');
       
@@ -420,20 +423,31 @@ async function extractWithHeadless(url: string): Promise<{ text: string; method:
         '--no-sandbox',
         '--disable-setuid-sandbox',
       ];
+      executablePath = undefined;
+      headlessFlag = true;
     }
 
+    console.log('[Universal Extractor] Browser args:', browserArgs.join(' '));
+    console.log('[Universal Extractor] Executable path:', executablePath || 'default');
+    console.log('[Universal Extractor] Headless mode:', headlessFlag);
+    console.log('[Universal Extractor] Attempting chromium.launch...');
+    
     // Launch browser with environment-specific configuration
     browser = await chromium.launch({
-      headless: true,
+      headless: headlessFlag,
       executablePath, // undefined for local, set for serverless
       args: browserArgs,
     });
+    
+    console.log('[Universal Extractor] Browser launched successfully');
 
     const context = await browser.newContext({
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
     });
+    console.log('[Universal Extractor] Browser context created');
 
     const page = await context.newPage();
+    console.log('[Universal Extractor] New page created');
 
     // Block images, media, fonts for speed (critical for serverless performance)
     await page.route('**/*', (route) => {
@@ -444,32 +458,45 @@ async function extractWithHeadless(url: string): Promise<{ text: string; method:
         route.continue();
       }
     });
+    console.log('[Universal Extractor] Resource blocking configured');
 
     // Navigate with timeout
+    console.log('[Universal Extractor] Navigating to URL:', url);
     await page.goto(url, { 
       waitUntil: 'domcontentloaded', 
       timeout: FETCH_TIMEOUT_MS 
     });
+    console.log('[Universal Extractor] Page loaded successfully');
 
     // Wait for potential dynamic content
+    console.log('[Universal Extractor] Waiting for dynamic content...');
     await page.waitForTimeout(2000);
 
     // Get rendered HTML
+    console.log('[Universal Extractor] Getting page content...');
     const html = await page.content();
+    console.log('[Universal Extractor] Got HTML content, length:', html.length);
+    
     await browser.close();
+    console.log('[Universal Extractor] Browser closed');
 
     // Re-run cheerio extraction on rendered HTML
     const result = extractWithCheerio(html);
     if (result) {
+      console.log('[Universal Extractor] Extraction successful via', result.method);
       return { text: result.text, method: `headless-${result.method}` };
     }
 
+    console.log('[Universal Extractor] Cheerio extraction found no content');
     return null;
   } catch (error: any) {
     console.error('[Universal Extractor] Headless browser error:', error?.message || error);
+    console.error('[Universal Extractor] Error name:', error?.name);
+    console.error('[Universal Extractor] Error stack:', error?.stack);
     if (browser) {
       try {
         await browser.close();
+        console.log('[Universal Extractor] Browser closed after error');
       } catch (closeError) {
         console.warn('[Universal Extractor] Failed to close browser:', closeError);
       }
