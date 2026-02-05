@@ -393,34 +393,35 @@ async function extractWithHeadless(url: string): Promise<{ text: string; method:
     
     let executablePath: string | undefined;
     let browserArgs: string[];
-    let headless: boolean | 'shell' = true;
+    let headless: any = true;
     
     if (isServerless) {
       console.log('[Universal Extractor] Serverless detected, using @sparticuz/chromium-min');
-      const chromiumMod = await import('@sparticuz/chromium-min');
-      const puppeteerMod = await import('puppeteer-core');
-      
-      const chromium = (chromiumMod as any).default || chromiumMod;
-      const puppeteer = (puppeteerMod as any).default || puppeteerMod;
       
       // Points to a stable binary pack for the specified version
       const CHROMIUM_PACK_URL = 'https://github.com/Sparticuz/chromium/releases/download/v132.0.0/chromium-v132.0.0-pack.tar';
       
-      executablePath = await chromium.executablePath(CHROMIUM_PACK_URL);
-      browserArgs = chromium.args;
-      headless = chromium.headless as any;
+      // Use dynamic imports to prevent bundling issues
+      const [chromium, puppeteer] = await Promise.all([
+        import('@sparticuz/chromium-min').then(m => m.default || m),
+        import('puppeteer-core').then(m => m.default || m)
+      ]);
       
-      console.log('[Universal Extractor] Chromium executable path:', executablePath);
+      console.log('[Universal Extractor] Packages imported, fetching executable path...');
+      executablePath = await (chromium as any).executablePath(CHROMIUM_PACK_URL);
+      browserArgs = (chromium as any).args;
+      headless = (chromium as any).headless;
       
-      browser = await puppeteer.launch({
+      console.log('[Universal Extractor] Launching Puppeteer with executable:', executablePath);
+      
+      browser = await (puppeteer as any).launch({
         args: browserArgs,
         executablePath,
-        headless: headless as any,
-        defaultViewport: chromium.defaultViewport,
+        headless: headless,
+        defaultViewport: (chromium as any).defaultViewport,
       });
     } else {
       console.log('[Universal Extractor] Local environment detected, using local Playwright Chromium');
-      // For local, we stick to Playwright to avoid needing local Puppeteer setup
       const { chromium: playwrightChromium } = await import('playwright-core');
       browser = await playwrightChromium.launch({
         headless: true,
@@ -430,35 +431,32 @@ async function extractWithHeadless(url: string): Promise<{ text: string; method:
     
     console.log('[Universal Extractor] Browser launched successfully');
 
-    const page = isServerless 
-      ? await (browser as any).newPage() 
-      : await (browser as any).newPage({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36' });
+    const page = await browser.newPage();
+    const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
 
-    // For Puppeteer (Serverless), we set the User Agent AFTER page creation if it wasn't passed
+    // Set User Agent differently based on browser type
     if (isServerless) {
-      await (page as any).setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
+      await (page as any).setUserAgent(userAgent);
+    } else {
+      // Playwright's newPage doesn't take UA as easily after launch, 
+      // but we can set it via extra headers or context (local use only anyway)
     }
 
-    // Block non-essential resources for speed and memory efficiency
-    const isPuppeteer = !isServerless ? false : true;
+    // Resource blocking (speed/memory)
     if (isServerless) {
-      // Puppeteer-specific interception
       const puppeteerPage = page as any;
       await puppeteerPage.setRequestInterception(true);
       puppeteerPage.on('request', (req: any) => {
-        const type = req.resourceType();
-        if (['image', 'media', 'font', 'stylesheet'].includes(type)) {
+        if (['image', 'media', 'font', 'stylesheet'].includes(req.resourceType())) {
           req.abort();
         } else {
           req.continue();
         }
       });
     } else {
-      // Playwright-specific interception
       const playwrightPage = page as any;
       await playwrightPage.route('**/*', (route: any) => {
-        const type = route.request().resourceType();
-        if (['image', 'media', 'font', 'stylesheet'].includes(type)) {
+        if (['image', 'media', 'font', 'stylesheet'].includes(route.request().resourceType())) {
           route.abort();
         } else {
           route.continue();
@@ -466,7 +464,6 @@ async function extractWithHeadless(url: string): Promise<{ text: string; method:
       });
     }
 
-    // Navigate with timeout
     console.log('[Universal Extractor] Navigating to:', url);
     await page.goto(url, { 
       waitUntil: 'domcontentloaded', 
@@ -476,13 +473,11 @@ async function extractWithHeadless(url: string): Promise<{ text: string; method:
     // Wait for dynamic content
     await new Promise(resolve => setTimeout(resolve, 2000));
 
-    // Get rendered HTML
     const html = await page.content();
     console.log('[Universal Extractor] Content extracted, length:', html.length);
     
     await browser.close();
 
-    // Re-run cheerio extraction on rendered HTML
     const result = extractWithCheerio(html);
     if (result) {
       return { text: result.text, method: `headless-${result.method}` };
