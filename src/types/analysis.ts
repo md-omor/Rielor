@@ -1,5 +1,6 @@
 export interface AnalysisRequest {
-  jobDescriptionText: string;
+  jobDescriptionText?: string;
+  jobUrl?: string;
   resumeText: string;
   userId?: string;
 }
@@ -62,6 +63,7 @@ export interface AnalysisResponse {
   };
   meta: {
     analysisVersion: string;
+    inputHash?: string;
   };
 }
 
