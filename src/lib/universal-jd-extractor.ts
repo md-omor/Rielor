@@ -379,20 +379,14 @@ function hasScriptTags(html: string): boolean {
  * Renders page with headless browser and extracts content
  */
 async function extractWithHeadless(url: string): Promise<{ text: string; method: string } | null> {
-  const wsEndpoint = process.env.BROWSER_WS_ENDPOINT;
   let browser;
-  
   try {
-    if (wsEndpoint) {
-      console.log('[Universal Extractor] Connecting to remote headless browser...');
-      browser = await chromium.connectOverCDP(wsEndpoint);
-    } else {
-      console.log('[Universal Extractor] Launching local headless browser...');
-      browser = await chromium.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      });
-    }
+    console.log('[Universal Extractor] Launching headless browser...');
+    
+    browser = await chromium.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
 
     const context = await browser.newContext({
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
@@ -431,48 +425,8 @@ async function extractWithHeadless(url: string): Promise<{ text: string; method:
 
     return null;
   } catch (error: any) {
-    const isVercelBinaryError = error?.message?.includes('executable') || error?.message?.includes('path');
-    if (isVercelBinaryError) {
-      console.warn('[Universal Extractor] Browser binary not found (likely serverless). Skipping local headless.');
-    } else {
-      console.error('[Universal Extractor] Headless browser error:', error?.message || error);
-    }
+    console.error('[Universal Extractor] Headless browser error:', error?.message || error);
     if (browser) await browser.close();
-    return null;
-  }
-}
-
-/**
- * Fallback: Extracts content via Jina.ai Reader API (Hosted Headless Browser)
- * This works on Vercel even without browser binaries.
- */
-async function extractWithJina(url: string): Promise<{ text: string; method: string } | null> {
-  try {
-    console.log('[Universal Extractor] Fetching via Jina.ai Reader...');
-    const jinaUrl = `https://r.jina.ai/${url}`;
-    const response = await fetch(jinaUrl, {
-      method: 'GET',
-      headers: {
-        'Accept': 'text/event-stream',
-        'X-Return-Format': 'markdown'
-      }
-    });
-
-    if (!response.ok) {
-      console.warn(`[Universal Extractor] Jina.ai returned status ${response.status}`);
-      return null;
-    }
-
-    const text = await response.text();
-    
-    if (text && text.length > 200) {
-      // Jina returns markdown, which AI handles perfectly
-      return { text, method: 'jina-proxy' };
-    }
-
-    return null;
-  } catch (error: any) {
-    console.error('[Universal Extractor] Jina fallback error:', error?.message || error);
     return null;
   }
 }
@@ -554,7 +508,7 @@ IGNORE these login prompts IF the text also contains specific job details.
 A valid job posting MUST have:
 - Job title (e.g., "Game Developer", "Sales Manager")
 - Specific responsibilities or requirements
-- Company name or information or Job details
+- Company name or details
 
 Return "NO" ONLY if:
 - It is PURELY a login page / error page / short snippet
@@ -651,15 +605,9 @@ export async function extractJDFromURL(url: string): Promise<JDExtractionResult>
 
   // Stage 2: HEADLESS BROWSER EXTRACTION (Primary Strategy - Option A)
   console.log('[Universal Extractor] Using headless browser for extraction...');
-  let extractionResult = await extractWithHeadless(normalizedUrl);
+  const extractionResult = await extractWithHeadless(normalizedUrl);
   
-  // VERCEL / FALLBACK: If headless failed (likely no browser binary), try Jina.ai proxy
-  if (!extractionResult || !extractionResult.text) {
-    console.log('[Universal Extractor] Headless extraction failed or skipped. Trying Jina.ai fallback...');
-    extractionResult = await extractWithJina(normalizedUrl);
-  }
-  
-  // No content extracted after fallbacks
+  // No content extracted at all
   if (!extractionResult || !extractionResult.text) {
     console.log('[Universal Extractor] ✗ No content extracted via headless browser');
     
