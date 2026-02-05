@@ -397,23 +397,23 @@ async function extractWithHeadless(url: string): Promise<{ text: string; method:
     
     if (isServerless) {
       console.log('[Universal Extractor] Serverless detected, using @sparticuz/chromium-min');
-      const chromium = await import('@sparticuz/chromium-min');
-      const puppeteer = await import('puppeteer-core');
+      const chromium = (await import('@sparticuz/chromium-min')) as any;
+      const puppeteer = (await import('puppeteer-core')) as any;
       
       // Points to a stable binary pack for the specified version
       const CHROMIUM_PACK_URL = 'https://github.com/Sparticuz/chromium/releases/download/v132.0.0/chromium-v132.0.0-pack.tar';
       
-      executablePath = await chromium.default.executablePath(CHROMIUM_PACK_URL);
-      browserArgs = chromium.default.args;
-      headless = chromium.default.headless;
+      executablePath = await (chromium.default || chromium).executablePath(CHROMIUM_PACK_URL);
+      browserArgs = (chromium.default || chromium).args;
+      headless = (chromium.default || chromium).headless;
       
       console.log('[Universal Extractor] Chromium executable path:', executablePath);
       
-      browser = await puppeteer.default.launch({
+      browser = await (puppeteer.default || puppeteer).launch({
         args: browserArgs,
         executablePath,
         headless: headless as any,
-        defaultViewport: chromium.default.defaultViewport,
+        defaultViewport: (chromium.default || chromium).defaultViewport,
       });
     } else {
       console.log('[Universal Extractor] Local environment detected, using local Playwright Chromium');
@@ -427,10 +427,14 @@ async function extractWithHeadless(url: string): Promise<{ text: string; method:
     
     console.log('[Universal Extractor] Browser launched successfully');
 
-    const page = await browser.newPage();
-    
-    // Set a realistic User Agent
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
+    const page = isServerless 
+      ? await (browser as any).newPage() 
+      : await (browser as any).newPage({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36' });
+
+    // For Puppeteer (Serverless), we set the User Agent AFTER page creation if it wasn't passed
+    if (isServerless) {
+      await (page as any).setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
+    }
 
     // Block non-essential resources for speed and memory efficiency
     const isPuppeteer = !isServerless ? false : true;
