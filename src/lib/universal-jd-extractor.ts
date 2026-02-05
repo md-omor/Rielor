@@ -377,15 +377,56 @@ function hasScriptTags(html: string): boolean {
 
 /**
  * Renders page with headless browser and extracts content
+ * Supports both local development and serverless environments (Vercel)
  */
 async function extractWithHeadless(url: string): Promise<{ text: string; method: string } | null> {
   let browser;
   try {
     console.log('[Universal Extractor] Launching headless browser...');
     
+    // Detect serverless environment (Vercel, AWS Lambda, etc.)
+    const isServerless = process.env.VERCEL === '1' || 
+                         process.env.AWS_LAMBDA_FUNCTION_NAME !== undefined;
+    
+    let executablePath: string | undefined;
+    let browserArgs: string[];
+    
+    if (isServerless) {
+      console.log('[Universal Extractor] Serverless environment detected, using @sparticuz/chromium');
+      try {
+        // Dynamic import to avoid bundling issues in client-side code
+        const chromiumPkg = await import('@sparticuz/chromium');
+        executablePath = await chromiumPkg.default.executablePath();
+        console.log('[Universal Extractor] Chromium executable path:', executablePath);
+      } catch (importError: any) {
+        console.error('[Universal Extractor] Failed to import @sparticuz/chromium:', importError?.message);
+        throw new Error('Serverless browser setup failed');
+      }
+      
+      // Aggressive args for serverless (memory/performance optimization)
+      browserArgs = [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--single-process',
+        '--no-zygote',
+      ];
+    } else {
+      console.log('[Universal Extractor] Local environment detected, using local Chromium');
+      
+      // Minimal args for local (avoid crashes)
+      browserArgs = [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+      ];
+    }
+
+    // Launch browser with environment-specific configuration
     browser = await chromium.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      executablePath, // undefined for local, set for serverless
+      args: browserArgs,
     });
 
     const context = await browser.newContext({
@@ -394,7 +435,7 @@ async function extractWithHeadless(url: string): Promise<{ text: string; method:
 
     const page = await context.newPage();
 
-    // Block images, media, fonts for speed
+    // Block images, media, fonts for speed (critical for serverless performance)
     await page.route('**/*', (route) => {
       const resourceType = route.request().resourceType();
       if (['image', 'media', 'font', 'stylesheet'].includes(resourceType)) {
@@ -426,7 +467,13 @@ async function extractWithHeadless(url: string): Promise<{ text: string; method:
     return null;
   } catch (error: any) {
     console.error('[Universal Extractor] Headless browser error:', error?.message || error);
-    if (browser) await browser.close();
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (closeError) {
+        console.warn('[Universal Extractor] Failed to close browser:', closeError);
+      }
+    }
     return null;
   }
 }
