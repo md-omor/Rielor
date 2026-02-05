@@ -19,9 +19,16 @@ const Header = () => {
   const fetchCredits = useCallback(async () => {
     try {
       setIsCreditsLoading(true);
-      const res = await fetch("/api/credits", { cache: "no-store" });
+      const res = await fetch("/api/credits", {
+        cache: "no-store",
+        credentials: "include",
+      });
 
       if (!res.ok) {
+        if ([401, 403, 404].includes(res.status)) {
+          setCredits(null);
+          return;
+        }
         let details: unknown = null;
         try {
           details = await res.json();
@@ -37,6 +44,10 @@ const Header = () => {
       const value = Number(data?.creditsRemaining);
       setCredits(Number.isFinite(value) ? value : null);
     } catch (error) {
+      if (error instanceof TypeError && error.message === "Failed to fetch") {
+        setCredits(null);
+        return;
+      }
       console.error("Failed to fetch credits:", error);
       setCredits(null);
     } finally {
