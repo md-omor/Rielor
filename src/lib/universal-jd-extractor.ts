@@ -49,11 +49,11 @@ const JOB_KEYWORDS = [
   'skills', 'education', 'degree', 'location', 'hybrid'
 ];
 
-// Login wall detection phrases
+// Common phrases indicating a login wall or security check
 const LOGIN_PHRASES = [
-  'sign in to view', 'login required', 'members only',
-  'create account', 'join to see', 'you must be logged in',
-  'please log in', 'authentication required', 'access denied'
+  'sign in', 'log in', 'create account', 'join now', 'authwall',
+  'security check', 'verify you are a human', 'blocked', 'access denied',
+  'challenge', 'captcha', 'please wait...'
 ];
 
 // ============================================================================
@@ -388,21 +388,31 @@ function hasScriptTags(html: string): boolean {
  * Supports both local development and serverless environments (Vercel)
  * FALLBACK: If local browser fails (common on Vercel), uses Jina.ai Reader (Free)
  */
+/**
+ * Renders page with headless browser and extracts content
+ * Supports both local development and serverless environments (Vercel)
+ * FALLBACK: If local browser fails or is blocked, uses Jina.ai Reader
+ */
 async function extractWithHeadless(url: string): Promise<{ text: string; method: string } | null> {
+  const isServerless = process.env.VERCEL === '1' || process.env.AWS_LAMBDA_FUNCTION_NAME !== undefined;
+  
   // Strategy 1: Local Serverless Browser (Playwright + @sparticuz/chromium)
   let browser;
   try {
-    console.log('[Universal Extractor] Attempting local browser extraction...');
-    const isServerless = process.env.VERCEL === '1' || process.env.AWS_LAMBDA_FUNCTION_NAME !== undefined;
+    console.log(`[Universal Extractor] Browser launch attempt (Serverless: ${isServerless})`);
     
     if (isServerless) {
+      // Pin to version-matched dynamic imports
       const chromium = (await import('@sparticuz/chromium')).default;
       const { chromium: playwright } = await import('playwright-core');
       
+      const executablePath = await chromium.executablePath();
+      console.log('[Universal Extractor] Chromium path:', executablePath);
+      
       browser = await playwright.launch({
-        args: chromium.args,
-        executablePath: await chromium.executablePath(),
-        headless: !!chromium.headless,
+        args: [...chromium.args, '--no-sandbox', '--disable-setuid-sandbox'],
+        executablePath: executablePath,
+        headless: chromium.headless as any,
       });
     } else {
       const { chromium: playwright } = await import('playwright-core');
@@ -412,64 +422,85 @@ async function extractWithHeadless(url: string): Promise<{ text: string; method:
       });
     }
     
+    console.log('[Universal Extractor] Browser launched, creating context...');
     const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      viewport: { width: 1280, height: 800 },
     });
     const page = await context.newPage();
     
-    // Resource blocking
+    // Resource blocking for speed
     await page.route('**/*', (route) => {
-      if (['image', 'media', 'font', 'stylesheet'].includes(route.request().resourceType())) {
+      const type = route.request().resourceType();
+      if (['image', 'media', 'font', 'stylesheet'].includes(type)) {
         route.abort();
       } else {
         route.continue();
       }
     });
 
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10000 });
-    await page.waitForTimeout(1000);
+    console.log('[Universal Extractor] Navigating to:', url);
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    
+    // Wait for content (Indeed uses dynamic rendering)
+    await page.waitForTimeout(2500);
+    
     const html = await page.content();
     await browser.close();
 
     const result = extractWithCheerio(html);
-    if (result) return { text: result.text, method: `headless-browser-${result.method}` };
+    if (result && result.text.length > 300) {
+      console.log('[Universal Extractor] ✓ Success via local browser');
+      return { text: result.text, method: `headless-browser-${result.method}` };
+    }
+    
+    console.warn('[Universal Extractor] Browser returned thin content, falling back to proxy');
   } catch (browserError: any) {
-    console.warn('[Universal Extractor] Browser extraction failed, falling back to proxy:', browserError?.message);
+    console.warn('[Universal Extractor] ⚠ Browser crashed/failed:', browserError?.message);
     if (browser) try { await browser.close(); } catch (e) {}
   }
 
-  // Strategy 2: Proxy Fallback (Jina.ai Reader - FREE, NO KEY NEEDED)
-  // This is the "Never Fail" insurance for MVP on Vercel
+  // Strategy 2: Proxy Fallback (Jina.ai Reader with bypass headers)
   try {
-    console.log(`[Universal Extractor] Attempting proxy extraction for: ${url}`);
-    const proxyUrl = `https://r.jina.ai/${url}`;
-    const response = await fetch(proxyUrl, {
+    console.log(`[Universal Extractor] Strategy: Proxy (Jina) for ${url}`);
+    
+    const response = await fetch(`https://r.jina.ai/${url}`, {
       headers: {
         'Accept': 'application/json',
-        'X-Return-Format': 'markdown'
+        'X-Return-Format': 'markdown',
+        'X-Target-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Referer': 'https://www.google.com/'
       }
     });
 
     if (response.ok) {
       const data = await response.json();
       const text = data.data?.content || data.data?.text || '';
-      if (text.length > 100) {
-        console.log('[Universal Extractor] ✓ Extraction success via Jina Reader proxy');
+      
+      // Check for security check pages
+      const isSecurityCheck = text.includes('Challenge') || text.includes('Security Check') || text.includes('verify you are a human');
+      
+      if (text.length > 200 && !isSecurityCheck) {
+        console.log('[Universal Extractor] ✓ Success via Jina Reader proxy');
         return { text: cleanText(text), method: 'proxy-jina' };
+      }
+      
+      if (isSecurityCheck) {
+         console.warn('[Universal Extractor] Proxy hit a security check, trying raw mode...');
       }
     }
     
-    // Last ditch: Get raw markdown if JSON fails
-    const rawResponse = await fetch(proxyUrl);
+    // Last ditch: Get raw markdown
+    const rawResponse = await fetch(`https://r.jina.ai/${url}`);
     if (rawResponse.ok) {
         const text = await rawResponse.text();
-        if (text.length > 200) {
-            console.log('[Universal Extractor] ✓ Extraction success via Jina Reader raw');
+        if (text.length > 400 && !text.includes('Security check')) {
+            console.log('[Universal Extractor] ✓ Success via Jina Reader raw');
             return { text: cleanText(text), method: 'proxy-jina-raw' };
         }
     }
   } catch (proxyError: any) {
-    console.error('[Universal Extractor] Proxy extraction failed:', proxyError?.message);
+    console.error('[Universal Extractor] Proxy failed:', proxyError?.message);
   }
 
   return null;
@@ -633,10 +664,10 @@ export async function extractJDFromURL(url: string): Promise<JDExtractionResult>
   }
   
   // Stage 1: Final Normalization (in case we followed a shortlink)
+  // Stage 1: Final Normalization
   const { normalizedUrl, isFeed } = normalizeJobUrl(targetUrl);
   
   if (isFeed) {
-    console.log('[Universal Extractor] ✗ Detected feed/search page');
     return {
       status: 'NOT_A_JOB_URL',
       jdText: '',
@@ -647,47 +678,65 @@ export async function extractJDFromURL(url: string): Promise<JDExtractionResult>
     };
   }
 
-  // Stage 2: HEADLESS BROWSER EXTRACTION (Primary Strategy - Option A)
-  console.log('[Universal Extractor] Using headless browser for extraction...');
-  const extractionResult = await extractWithHeadless(normalizedUrl);
+  // Stage 2: EXTRACTION PIPELINE (Browser -> Proxy -> Direct)
+  let extractionResult = await extractWithHeadless(normalizedUrl);
   
-  // No content extracted at all
-  if (!extractionResult || !extractionResult.text) {
-    console.log('[Universal Extractor] ✗ No content extracted via headless browser');
-    
-    // Try static fetch as last resort (just to check for login wall)
-    const { html, status: httpStatus } = await fetchHTML(normalizedUrl);
-    
-    if (detectLoginWall(html, '')) {
-      return {
-        status: 'RESTRICTED',
-        jdText: '',
-        reason: 'Login wall detected; page requires authentication',
-        finalUrl: normalizedUrl,
-        httpStatus,
-        debug: { stage: 'login_detection', extractedLength: 0 }
-      };
-    }
+  // Strategy 3: Direct Fetch (GoogleBot Bypass) if others fail
+  if (!extractionResult) {
+    try {
+      console.log('[Universal Extractor] Strategy 3: Direct Fetch (GoogleBot bypass)');
+      const res = await fetch(normalizedUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        }
+      });
+      if (res.ok) {
+        const html = await res.text();
+        const result = extractWithCheerio(html);
+        if (result && result.text.length > 500) {
+          extractionResult = { text: result.text, method: 'direct-googlebot' };
+        }
+      }
+    } catch (e) {}
+  }
 
+  // Final check for extracted content
+  if (!extractionResult || !extractionResult.text || extractionResult.text.length < 100) {
     return {
       status: 'EMPTY_OR_ERROR',
       jdText: '',
-      reason: 'Could not extract content from page',
+      reason: 'Could not extract content from page (Browser and Proxy blocked)',
       finalUrl: normalizedUrl,
-      httpStatus: httpStatus || 0,
-      debug: { stage: 'headless_extraction_failed', extractedLength: 0 }
+      httpStatus: 0,
+      debug: { stage: 'extraction_failed', extractedLength: 0 }
     };
   }
 
   const { text, method } = extractionResult;
   console.log(`[Universal Extractor] Extracted ${text.length} chars via ${method}`);
 
-  // Stage 3: AI Validation (Groq) - Determine if it's a job posting
+  // Stage 3: Validation & Filtering
+  // TRUST OVERRIDE: If text is long (>1500) and contains job keywords, bypass or relax AI check
+  const hasJobKeywords = JOB_KEYWORDS.some(kw => text.toLowerCase().includes(kw));
+  const isHighConfidence = text.length > 1500 && hasJobKeywords;
+  
+  if (isHighConfidence) {
+    console.log('[Universal Extractor] ✓ High confidence content detected (Size > 1500), skipping AI');
+    return {
+      status: 'SUCCESS',
+      jdText: text,
+      reason: `Extracted via ${method} (High Confidence)`,
+      finalUrl: normalizedUrl,
+      httpStatus: 200,
+      debug: { stage: 'length_override', extractedLength: text.length, extractionMethod: method }
+    };
+  }
+
   console.log('[Universal Extractor] Validating content with AI...');
   const isValidJob = await validateWithAI(text);
   
   if (isValidJob) {
-    console.log('[Universal Extractor] ✓ AI confirmed job posting');
     return {
       status: 'SUCCESS',
       jdText: text,
@@ -698,28 +747,27 @@ export async function extractJDFromURL(url: string): Promise<JDExtractionResult>
     };
   }
 
-  // AI rejected - check if it's a login wall
-  console.log('[Universal Extractor] ✗ AI rejected content as non-job');
+  // AI rejected - check if it's a login/security wall
+  console.log('[Universal Extractor] ✗ AI rejected content, checking for security walls');
   
-  const { html } = await fetchHTML(normalizedUrl);
-  if (detectLoginWall(html, text)) {
+  if (detectLoginWall('', text)) {
     return {
       status: 'RESTRICTED',
       jdText: '',
-      reason: 'Login wall detected; page requires authentication',
+      reason: 'Login wall or Security Check detected (Access Blocked)',
       finalUrl: normalizedUrl,
       httpStatus: 200,
-      debug: { stage: 'login_detection_deferred', extractedLength: text.length, extractionMethod: method }
+      debug: { stage: 'security_detection', extractedLength: text.length, extractionMethod: method }
     };
   }
   
   return {
     status: 'NOT_A_JOB_URL',
     jdText: '',
-    reason: 'Extracted content does not appear to be a job description',
+    reason: 'The page content was found but it does not appear to be a job posting',
     finalUrl: normalizedUrl,
     httpStatus: 200,
-    debug: { stage: 'ai_validation_failed', extractedLength: text.length, extractionMethod: method }
+    debug: { stage: 'validation_failed', extractedLength: text.length, extractionMethod: method }
   };
 }
 
