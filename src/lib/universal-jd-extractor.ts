@@ -383,30 +383,26 @@ function hasScriptTags(html: string): boolean {
  */
 async function getBrowser() {
   const isVercel = !!process.env.VERCEL || !!process.env.AWS_EXECUTION_ENV;
-  
+
   try {
     if (isVercel) {
       console.log('[Universal Extractor] Vercel environment detected, using @sparticuz/chromium');
-      // Using require for sparticuz to avoid bundling issues in some environments
-      // and only loading it when actually on Vercel
       const sparticuzChromium = require('@sparticuz/chromium');
-      
+
       return await chromium.launch({
         args: sparticuzChromium.args,
         executablePath: await sparticuzChromium.executablePath(),
-        headless: sparticuzChromium.headless, // ✅ Correct for v123: use the package's string value ("shell")
+        headless: true, // ✅ Fixed: Playwright needs a boolean, not "shell"
       });
     }
   } catch (e: any) {
     console.error('[Universal Extractor] Chromium launch failed:', e?.message);
-    // Don't fallback on Vercel - fail fast to get clear error logs
     if (isVercel) {
       throw new Error(`Failed to launch Chromium on Vercel: ${e?.message}`);
     }
     console.warn('[Universal Extractor] Falling back to standard launch');
   }
 
-  // Local development or fallback
   console.log('[Universal Extractor] Using standard playwright launch');
   return await chromium.launch({
     headless: true,
