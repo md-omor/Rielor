@@ -11,7 +11,7 @@
  */
 
 import * as cheerio from 'cheerio';
-import { chromium as playwright } from 'playwright-core';
+import { chromium } from 'playwright-core';
 
 // ============================================================================
 // TYPES
@@ -376,41 +376,8 @@ function hasScriptTags(html: string): boolean {
 }
 
 /**
- * Strategy 5: Extract using Jina.ai Reader fallback (ZERO-COST, NO BROWSER REQUIRED)
+ * Renders page with headless browser and extracts content
  */
-async function extractWithJina(url: string): Promise<{ text: string; method: string } | null> {
-  try {
-    console.log('[Universal Extractor] Attempting Jina.ai fallback...');
-    const jinaUrl = `https://r.jina.ai/${url}`;
-    
-    const response = await fetchImpl(jinaUrl, {
-      headers: {
-        'Accept': 'text/plain',
-        'X-No-Cache': 'true',
-      },
-    });
-
-    if (!response.ok) {
-      console.warn(`[Universal Extractor] Jina.ai error: ${response.status}`);
-      return null;
-    }
-
-    const text = await response.text();
-    
-    // Quick validation: Jina results are usually long if successful
-    if (text.length > 300 && !text.includes('403 Forbidden') && !text.includes('Cloudflare')) {
-      console.log(`[Universal Extractor] ✓ Successfully extracted ${text.length} chars via Jina.ai`);
-      return { text: cleanText(text), method: 'jina-proxy' };
-    }
-    
-    console.log('[Universal Extractor] ✗ Jina.ai result seems blocked or empty');
-    return null;
-  } catch (error: any) {
-    console.error('[Universal Extractor] Jina.ai fallback failed:', error?.message);
-    return null;
-  }
-}
-
 /**
  * Robust browser launcher for both Local and Vercel environments
  */
@@ -422,24 +389,26 @@ async function getBrowser() {
       console.log('[Universal Extractor] Vercel environment detected, using @sparticuz/chromium');
       // Using require for sparticuz to avoid bundling issues in some environments
       // and only loading it when actually on Vercel
-      const chromium = require('@sparticuz/chromium');
+      const sparticuzChromium = require('@sparticuz/chromium');
       
-      // Configure sparticuz/chromium
-      chromium.setGraphicsMode = false;
-      
-      return await playwright.launch({
-        args: chromium.args,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
+      return await chromium.launch({
+        args: sparticuzChromium.args,
+        executablePath: await sparticuzChromium.executablePath(),
+        headless: true, // ✅ Explicit boolean - compatible with all Playwright versions
       });
     }
-  } catch (e) {
-    console.warn('[Universal Extractor] Failed to load @sparticuz/chromium, falling back to standard launch:', e);
+  } catch (e: any) {
+    console.error('[Universal Extractor] Chromium launch failed:', e?.message);
+    // Don't fallback on Vercel - fail fast to get clear error logs
+    if (isVercel) {
+      throw new Error(`Failed to launch Chromium on Vercel: ${e?.message}`);
+    }
+    console.warn('[Universal Extractor] Falling back to standard launch');
   }
 
   // Local development or fallback
   console.log('[Universal Extractor] Using standard playwright launch');
-  return await playwright.launch({
+  return await chromium.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
   });
@@ -672,17 +641,11 @@ export async function extractJDFromURL(url: string): Promise<JDExtractionResult>
 
   // Stage 2: HEADLESS BROWSER EXTRACTION (Primary Strategy - Option A)
   console.log('[Universal Extractor] Using headless browser for extraction...');
-  let extractionResult = await extractWithHeadless(normalizedUrl);
+  const extractionResult = await extractWithHeadless(normalizedUrl);
   
-  // No content extracted via headless browser -> Try Jina.ai Fallback
+  // No content extracted at all
   if (!extractionResult || !extractionResult.text) {
-    console.log('[Universal Extractor] ! Headless browser failed or missing, trying Jina.ai fallback...');
-    extractionResult = await extractWithJina(normalizedUrl);
-  }
-
-  // Still no content extracted at all
-  if (!extractionResult || !extractionResult.text) {
-    console.log('[Universal Extractor] ✗ All automated extraction methods failed');
+    console.log('[Universal Extractor] ✗ No content extracted via headless browser');
     
     // Try static fetch as last resort (just to check for login wall)
     const { html, status: httpStatus } = await fetchHTML(normalizedUrl);
@@ -701,10 +664,10 @@ export async function extractJDFromURL(url: string): Promise<JDExtractionResult>
     return {
       status: 'EMPTY_OR_ERROR',
       jdText: '',
-      reason: 'Could not extract content from page automatically',
+      reason: 'Could not extract content from page',
       finalUrl: normalizedUrl,
       httpStatus: httpStatus || 0,
-      debug: { stage: 'all_extraction_failed', extractedLength: 0 }
+      debug: { stage: 'headless_extraction_failed', extractedLength: 0 }
     };
   }
 
