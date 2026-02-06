@@ -394,7 +394,7 @@ async function getBrowser() {
       return await chromium.launch({
         args: sparticuzChromium.args,
         executablePath: await sparticuzChromium.executablePath(),
-        headless: true, // ✅ Explicit boolean - compatible with all Playwright versions
+        headless: sparticuzChromium.headless, // ✅ Correct for v123: use the package's string value ("shell")
       });
     }
   } catch (e: any) {
