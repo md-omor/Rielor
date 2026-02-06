@@ -12,6 +12,8 @@
 
 import * as cheerio from 'cheerio';
 import puppeteer from "puppeteer-core";
+import fs from "fs";
+import path from "path";
 
 // ============================================================================
 // TYPES
@@ -43,10 +45,56 @@ const MIN_WEAK_SIGNAL_CHARS = 100; // Relaxed from 200 to 100
 const LENGTH_OVERRIDE_CHARS = 300; // Auto-pass threshold
 const DEFAULT_CHROMIUM_PACK_URL = 'https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar';
 
-async function loadServerlessChromium() {
-  if (process.env.VERCEL && !process.env.AWS_EXECUTION_ENV && !process.env.AWS_LAMBDA_JS_RUNTIME) {
+function prependLibraryPath(path: string) {
+  if (!path) return;
+
+  const current = process.env.LD_LIBRARY_PATH;
+  if (!current) {
+    process.env.LD_LIBRARY_PATH = path;
+    return;
+  }
+
+  const parts = current.split(':');
+  if (!parts.includes(path)) {
+    process.env.LD_LIBRARY_PATH = [path, ...parts].join(':');
+  }
+}
+
+async function tryLoadServerlessChromium() {
+  if (process.env.VERCEL) {
     const majorNodeVersion = process.versions.node.split('.')[0];
-    process.env.AWS_EXECUTION_ENV = `AWS_Lambda_nodejs${majorNodeVersion}.x`;
+    const lambdaRuntime = `nodejs${majorNodeVersion}.x`;
+
+    process.env.AWS_EXECUTION_ENV ??= `AWS_Lambda_${lambdaRuntime}`;
+    process.env.AWS_LAMBDA_JS_RUNTIME ??= lambdaRuntime;
+
+    const preferredLibPath = Number(majorNodeVersion) >= 20 ? '/tmp/al2023/lib' : '/tmp/al2/lib';
+    prependLibraryPath(preferredLibPath);
+  }
+
+  try {
+    const chromiumModule = await import('@sparticuz/chromium');
+    return chromiumModule.default ?? chromiumModule;
+  } catch (error: any) {
+    const message = error?.message || '';
+    if (error?.code === 'ERR_MODULE_NOT_FOUND' || message.includes("Cannot find package '@sparticuz/chromium-min'")) {
+      console.warn('[Universal Extractor] @sparticuz/chromium-min is not installed. Falling back to system/browser endpoint strategies.');
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function loadServerlessChromium() {
+  if (process.env.VERCEL) {
+    const majorNodeVersion = process.versions.node.split('.')[0];
+    const lambdaRuntime = `nodejs${majorNodeVersion}.x`;
+
+    process.env.AWS_EXECUTION_ENV ??= `AWS_Lambda_${lambdaRuntime}`;
+    process.env.AWS_LAMBDA_JS_RUNTIME ??= lambdaRuntime;
+
+    const preferredLibPath = Number(majorNodeVersion) >= 20 ? '/tmp/al2023/lib' : '/tmp/al2/lib';
+    prependLibraryPath(preferredLibPath);
   }
 
   const chromiumModule = await import('@sparticuz/chromium');
@@ -385,6 +433,8 @@ function hasScriptTags(html: string): boolean {
   return html.includes('<script');
 }
 
+
+
 /**
  * Renders page with headless browser and extracts content
  */
@@ -439,109 +489,80 @@ function hasScriptTags(html: string): boolean {
 // }
 
 
-
-
-async function getLocalChromePath(): Promise<string | undefined> {
-  // 0) If user sets it manually, always respect it
-  const envPath =
-    process.env.PUPPETEER_EXECUTABLE_PATH ||
-    process.env.CHROME_PATH ||
-    process.env.GOOGLE_CHROME_BIN;
-  if (envPath) return envPath;
-
-  // 1) Try chrome-launcher (nice when it works)
-  try {
-    const chromeLauncher = await import("chrome-launcher");
-    const p = chromeLauncher.Launcher.getFirstInstallation();
-    if (p) return p;
-  } catch {
-    // ignore
-  }
-
-  // 2) Fallback: common install locations
-  const fs = await import("node:fs");
-
-  if (process.platform === "win32") {
-    const local = process.env.LOCALAPPDATA || "";
-    const programFiles = process.env.PROGRAMFILES || "C:\\Program Files";
-    const programFilesx86 = process.env["PROGRAMFILES(X86)"] || "C:\\Program Files (x86)";
-
-    const candidates = [
-      `${programFiles}\\Google\\Chrome\\Application\\chrome.exe`,
-      `${programFilesx86}\\Google\\Chrome\\Application\\chrome.exe`,
-      `${local}\\Google\\Chrome\\Application\\chrome.exe`,
-
-      `${programFiles}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`,
-      `${programFilesx86}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`,
-      `${local}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`,
-
-      `${programFiles}\\Microsoft\\Edge\\Application\\msedge.exe`,
-      `${programFilesx86}\\Microsoft\\Edge\\Application\\msedge.exe`,
-      `${local}\\Microsoft\\Edge\\Application\\msedge.exe`,
-    ];
-
-    return candidates.find((p) => p && fs.existsSync(p));
-  }
-
-  if (process.platform === "darwin") {
-    const candidates = [
-      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-      "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
-      "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
-    ];
-    return candidates.find((p) => fs.existsSync(p));
-  }
-
-  // linux
-  const candidates = [
-    "/usr/bin/google-chrome-stable",
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium-browser",
-    "/usr/bin/chromium",
-    "/snap/bin/chromium",
-  ];
-  return candidates.find((p) => fs.existsSync(p));
+function getRemoteBrowserWSEndpoint() {
+  return process.env.PUPPETEER_WS_ENDPOINT || process.env.BROWSER_WS_ENDPOINT || process.env.BROWSERLESS_WS_ENDPOINT;
 }
 
-
+/**
+ * Robust browser launcher for both Local and Vercel environments
+ */
 async function getBrowser() {
+  const wsEndpoint = getRemoteBrowserWSEndpoint();
+  if (wsEndpoint) {
+    console.log('[Universal Extractor] Using remote browser WebSocket endpoint.');
+    return await puppeteer.connect({ browserWSEndpoint: wsEndpoint });
+  }
+
   const isVercel = !!process.env.VERCEL;
 
   if (isVercel) {
-     const chromium = await loadServerlessChromium();
-    let executablePath: string;
+    const chromium = await tryLoadServerlessChromium();
 
-    try {
-      executablePath = await chromium.executablePath();
-    } catch (error: any) {
-      const message = error?.message || '';
-      if (!message.includes('does not exist')) {
-        throw error;
+    if (chromium) {
+      let executablePath: string;
+
+      try {
+        executablePath = await chromium.executablePath();
+      } catch (error: any) {
+        const message = error?.message || '';
+        if (!message.includes('does not exist')) {
+          throw error;
+        }
+
+        const chromiumPackUrl = process.env.CHROMIUM_PACK_URL || DEFAULT_CHROMIUM_PACK_URL;
+        console.warn('[Universal Extractor] chromium-min local bin missing. Falling back to remote pack URL.');
+        executablePath = await chromium.executablePath(chromiumPackUrl);
       }
 
-      const chromiumPackUrl = process.env.CHROMIUM_PACK_URL || DEFAULT_CHROMIUM_PACK_URL;
-      console.warn('[Universal Extractor] chromium-min local bin missing. Falling back to remote pack URL.');
-      executablePath = await chromium.executablePath(chromiumPackUrl);
+      prependLibraryPath('/tmp/al2023/lib');
+      prependLibraryPath('/tmp/al2/lib');
+
+      return await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath,
+        headless: chromium.headless,
+      });
     }
-    return await puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-       executablePath,
-      headless: chromium.headless,
-    });
+
+    const executablePathFromEnv =
+      process.env.PUPPETEER_EXECUTABLE_PATH ||
+      process.env.CHROME_PATH ||
+      process.env.GOOGLE_CHROME_BIN;
+
+    if (executablePathFromEnv) {
+      return await puppeteer.launch({
+        headless: true,
+        executablePath: executablePathFromEnv,
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+      });
+    }
+
+    throw new Error(
+      'No Chromium runtime available on Vercel. Either install @sparticuz/chromium-min, set CHROMIUM_PACK_URL, set PUPPETEER_EXECUTABLE_PATH/CHROME_PATH, or provide PUPPETEER_WS_ENDPOINT.'
+    );
   }
 
-  // ✅ local: find installed Chrome
   const executablePath = await getLocalChromePath();
-if (!executablePath) {
-  throw new Error(
-    "Local Chrome not found. Set PUPPETEER_EXECUTABLE_PATH (or install Chrome/Brave/Edge)."
-  );
-}
+  if (!executablePath) {
+    throw new Error(
+      'Local Chrome not found. Set PUPPETEER_EXECUTABLE_PATH (or install Chrome/Brave/Edge).'
+    );
+  }
   return await puppeteer.launch({
     headless: true,
     executablePath,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
   });
 }
 
@@ -857,4 +878,42 @@ export async function extractJDFromURLSimple(url: string): Promise<string> {
   }
   
   return result.jdText;
+}
+/**
+ * Finds local Chrome/Brave executable in standard locations
+ */
+async function getLocalChromePath(): Promise<string | undefined> {
+  const platform = process.platform;
+  
+  if (platform === 'win32') {
+    const paths = [
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
+      'C:\\Program Files (x86)\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
+      path.join(process.env.LOCALAPPDATA || '', 'Google\\Chrome\\Application\\chrome.exe'),
+      path.join(process.env.LOCALAPPDATA || '', 'BraveSoftware\\Brave-Browser\\Application\\brave.exe'),
+    ];
+    return paths.find(p => fs.existsSync(p));
+  }
+  
+  if (platform === 'darwin') {
+    const paths = [
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+    ];
+    return paths.find(p => fs.existsSync(p));
+  }
+  
+  if (platform === 'linux') {
+    const paths = [
+      '/usr/bin/google-chrome',
+      '/usr/bin/brave-browser',
+      '/usr/bin/chromium-browser',
+      '/usr/bin/chromium',
+    ];
+    return paths.find(p => fs.existsSync(p));
+  }
+  
+  return undefined;
 }
