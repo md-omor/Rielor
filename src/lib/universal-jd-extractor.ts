@@ -429,6 +429,71 @@ function hasScriptTags(html: string): boolean {
 // }
 
 
+
+
+async function getLocalChromePath(): Promise<string | undefined> {
+  // 0) If user sets it manually, always respect it
+  const envPath =
+    process.env.PUPPETEER_EXECUTABLE_PATH ||
+    process.env.CHROME_PATH ||
+    process.env.GOOGLE_CHROME_BIN;
+  if (envPath) return envPath;
+
+  // 1) Try chrome-launcher (nice when it works)
+  try {
+    const chromeLauncher = await import("chrome-launcher");
+    const p = chromeLauncher.Launcher.getFirstInstallation();
+    if (p) return p;
+  } catch {
+    // ignore
+  }
+
+  // 2) Fallback: common install locations
+  const fs = await import("node:fs");
+
+  if (process.platform === "win32") {
+    const local = process.env.LOCALAPPDATA || "";
+    const programFiles = process.env.PROGRAMFILES || "C:\\Program Files";
+    const programFilesx86 = process.env["PROGRAMFILES(X86)"] || "C:\\Program Files (x86)";
+
+    const candidates = [
+      `${programFiles}\\Google\\Chrome\\Application\\chrome.exe`,
+      `${programFilesx86}\\Google\\Chrome\\Application\\chrome.exe`,
+      `${local}\\Google\\Chrome\\Application\\chrome.exe`,
+
+      `${programFiles}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`,
+      `${programFilesx86}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`,
+      `${local}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`,
+
+      `${programFiles}\\Microsoft\\Edge\\Application\\msedge.exe`,
+      `${programFilesx86}\\Microsoft\\Edge\\Application\\msedge.exe`,
+      `${local}\\Microsoft\\Edge\\Application\\msedge.exe`,
+    ];
+
+    return candidates.find((p) => p && fs.existsSync(p));
+  }
+
+  if (process.platform === "darwin") {
+    const candidates = [
+      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+      "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+      "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    ];
+    return candidates.find((p) => fs.existsSync(p));
+  }
+
+  // linux
+  const candidates = [
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/google-chrome",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/chromium",
+    "/snap/bin/chromium",
+  ];
+  return candidates.find((p) => fs.existsSync(p));
+}
+
+
 async function getBrowser() {
   const isVercel = !!process.env.VERCEL;
 
@@ -437,17 +502,25 @@ async function getBrowser() {
     return await puppeteer.launch({
       args: chromium.default.args,
       defaultViewport: chromium.default.defaultViewport,
-      executablePath: await chromium.default.executablePath(), // ✅ no URL here
+      executablePath: await chromium.default.executablePath(),
       headless: chromium.default.headless,
     });
   }
 
-  // local fallback
+  // ✅ local: find installed Chrome
+  const executablePath = await getLocalChromePath();
+if (!executablePath) {
+  throw new Error(
+    "Local Chrome not found. Set PUPPETEER_EXECUTABLE_PATH (or install Chrome/Brave/Edge)."
+  );
+}
   return await puppeteer.launch({
     headless: true,
+    executablePath,
     args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
   });
 }
+
 
 
 /**
