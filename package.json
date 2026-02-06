@@ -16,7 +16,7 @@
     "@clerk/nextjs": "^6.36.10",
     "@google/generative-ai": "^0.24.1",
     "@napi-rs/canvas": "^0.1.76",
-    "@sparticuz/chromium-min": "131.0.1",
+    "@sparticuz/chromium": "^131.0.1",
     "@vercel/analytics": "^1.6.1",
     "cheerio": "^1.2.0",
     "chrome-launcher": "^1.2.1",

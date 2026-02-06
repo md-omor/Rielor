@@ -10,7 +10,6 @@
  * 6. Returns structured classification (SUCCESS, RESTRICTED, NOT_A_JOB_URL, EMPTY_OR_ERROR)
  */
 
-import chromium from "@sparticuz/chromium-min";
 import * as cheerio from 'cheerio';
 import puppeteer from "puppeteer-core";
 
@@ -43,6 +42,16 @@ const MIN_STRONG_SIGNAL_CHARS = 50;
 const MIN_WEAK_SIGNAL_CHARS = 100; // Relaxed from 200 to 100
 const LENGTH_OVERRIDE_CHARS = 300; // Auto-pass threshold
 const DEFAULT_CHROMIUM_PACK_URL = 'https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar';
+
+async function loadServerlessChromium() {
+  if (process.env.VERCEL && !process.env.AWS_EXECUTION_ENV && !process.env.AWS_LAMBDA_JS_RUNTIME) {
+    const majorNodeVersion = process.versions.node.split('.')[0];
+    process.env.AWS_EXECUTION_ENV = `AWS_Lambda_nodejs${majorNodeVersion}.x`;
+  }
+
+  const chromiumModule = await import('@sparticuz/chromium');
+  return chromiumModule.default ?? chromiumModule;
+}
 // Job-specific keywords for heuristic validation
 const JOB_KEYWORDS = [
   'responsibilities', 'qualifications', 'requirements', 'required',
@@ -499,6 +508,7 @@ async function getBrowser() {
   const isVercel = !!process.env.VERCEL;
 
   if (isVercel) {
+     const chromium = await loadServerlessChromium();
     let executablePath: string;
 
     try {
