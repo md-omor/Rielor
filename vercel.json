@@ -3,6 +3,16 @@
     "app/api/**": {
       "memory": 1024,
       "maxDuration": 30
+    },
+    "/api/**": {
+      "memory": 1024,
+      "maxDuration": 30
+    },
+     "api/extract-jd": {
+      "includeFiles": "node_modules/@sparticuz/chromium-min/**"
+    },
+    "api/**": {
+      "includeFiles": "node_modules/@sparticuz/chromium-min/**"
     }
   }
 }
