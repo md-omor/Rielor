@@ -6,7 +6,8 @@ import {
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-export const runtime = "nodejs";
+export const runtime = "nodejs";  
+export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   let url: string | undefined;
