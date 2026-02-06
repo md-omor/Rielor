@@ -1,9 +1,10 @@
+
 import {
-    AnalysisBreakdown,
-    CandidateProfile,
-    JobRequirements,
-    ScoreWithStatus,
-    normalizeSkill,
+  AnalysisBreakdown,
+  CandidateProfile,
+  JobRequirements,
+  ScoreWithStatus,
+  normalizeSkill,
 } from "@/types/analysis";
 
 // Education Level Ranks for comparison

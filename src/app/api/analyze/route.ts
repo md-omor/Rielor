@@ -57,7 +57,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const jobInput = resolveJobDescriptionInput({ jobDescriptionText, jobUrl });
+     const jobInput = resolveJobDescriptionInput({ jobDescriptionText, jobUrl });
 
     if (jobInput.mode === "empty") {
       return NextResponse.json(
@@ -102,6 +102,7 @@ export async function POST(request: Request) {
       finalJobDescription = extraction.text;
     }
 
+
     // 2. Perform Analysis Flow
     const result = await performAnalysisFlow(
       resolvedUserId,
@@ -132,7 +133,7 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({
+     return NextResponse.json({
       ok: true,
       creditsRemaining: result.creditsRemaining,
       analysis: result.data,
