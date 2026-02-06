@@ -11,7 +11,7 @@
  */
 
 import * as cheerio from 'cheerio';
-import { chromium } from 'playwright-core';
+import puppeteer from 'puppeteer-core';
 
 // ============================================================================
 // TYPES
@@ -389,10 +389,11 @@ async function getBrowser() {
       console.log('[Universal Extractor] Vercel environment detected, using @sparticuz/chromium');
       const sparticuzChromium = require('@sparticuz/chromium');
 
-      return await chromium.launch({
+      return await puppeteer.launch({
         args: sparticuzChromium.args,
+        defaultViewport: sparticuzChromium.defaultViewport,
         executablePath: await sparticuzChromium.executablePath(),
-        headless: true, // ✅ Fixed: Playwright needs a boolean, not "shell"
+        headless: true,
       });
     }
   } catch (e: any) {
@@ -403,9 +404,26 @@ async function getBrowser() {
     console.warn('[Universal Extractor] Falling back to standard launch');
   }
 
-  console.log('[Universal Extractor] Using standard playwright launch');
-  return await chromium.launch({
+  console.log('[Universal Extractor] Using standard puppeteer launch');
+  
+  // Try to find local chrome on Windows
+  let executablePath;
+  if (process.platform === 'win32') {
+    const fs = require('fs');
+    const paths = [
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
+      'C:\\Program Files (x86)\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
+      (process.env.LOCALAPPDATA || '') + '\\Google\\Chrome\\Application\\chrome.exe',
+      (process.env.LOCALAPPDATA || '') + '\\BraveSoftware\\Brave-Browser\\Application\\brave.exe'
+    ];
+    executablePath = paths.find(p => p && fs.existsSync(p));
+  }
+
+  return await puppeteer.launch({
     headless: true,
+    executablePath,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
   });
 }
@@ -419,20 +437,18 @@ async function extractWithHeadless(url: string): Promise<{ text: string; method:
     console.log('[Universal Extractor] Launching headless browser...');
     
     browser = await getBrowser();
+    const page = await browser.newPage();
 
-    const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-    });
-
-    const page = await context.newPage();
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
 
     // Block images, media, fonts for speed
-    await page.route('**/*', (route) => {
-      const resourceType = route.request().resourceType();
+    await page.setRequestInterception(true);
+    page.on('request', (request) => {
+      const resourceType = request.resourceType();
       if (['image', 'media', 'font', 'stylesheet'].includes(resourceType)) {
-        route.abort();
+        request.abort();
       } else {
-        route.continue();
+        request.continue();
       }
     });
 
@@ -442,8 +458,8 @@ async function extractWithHeadless(url: string): Promise<{ text: string; method:
       timeout: FETCH_TIMEOUT_MS 
     });
 
-    // Wait for potential dynamic content
-    await page.waitForTimeout(2000);
+    // Wait for potential dynamic content (using native setTimeout or waitForTimeout if available in older puppets)
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
     // Get rendered HTML
     const html = await page.content();

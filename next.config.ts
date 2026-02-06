@@ -5,7 +5,6 @@ const nextConfig: NextConfig = {
     "@sparticuz/chromium-min", 
     "@sparticuz/chromium",
     "puppeteer-core", 
-    "playwright-core",
     "pdfjs-dist", 
     "pdf-parse"
   ],
