@@ -10,8 +10,9 @@
  * 6. Returns structured classification (SUCCESS, RESTRICTED, NOT_A_JOB_URL, EMPTY_OR_ERROR)
  */
 
+import chromium from "@sparticuz/chromium-min";
 import * as cheerio from 'cheerio';
-import puppeteer from 'puppeteer-core';
+import puppeteer from "puppeteer-core";
 
 // ============================================================================
 // TYPES
@@ -498,12 +499,11 @@ async function getBrowser() {
   const isVercel = !!process.env.VERCEL;
 
   if (isVercel) {
-    const chromium = await import("@sparticuz/chromium-min");
     return await puppeteer.launch({
-      args: chromium.default.args,
-      defaultViewport: chromium.default.defaultViewport,
-      executablePath: await chromium.default.executablePath(),
-      headless: chromium.default.headless,
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
     });
   }
 
