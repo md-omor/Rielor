@@ -386,14 +386,14 @@ async function getBrowser() {
 
   try {
     if (isVercel) {
-      console.log('[Universal Extractor] Vercel environment detected, using @sparticuz/chromium');
-      const sparticuzChromium = require('@sparticuz/chromium');
+      console.log('[Universal Extractor] Vercel environment detected, using @sparticuz/chromium-min');
+      const sparticuzChromium = require('@sparticuz/chromium-min');
 
       return await puppeteer.launch({
         args: sparticuzChromium.args,
         defaultViewport: sparticuzChromium.defaultViewport,
-        executablePath: await sparticuzChromium.executablePath(),
-        headless: true,
+        executablePath: await sparticuzChromium.executablePath('https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar'),
+        headless: sparticuzChromium.headless,
       });
     }
   } catch (e: any) {
