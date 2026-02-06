@@ -42,6 +42,7 @@ const MAX_REDIRECTS = 10; // Universal redirect following budget
 const MIN_STRONG_SIGNAL_CHARS = 50;
 const MIN_WEAK_SIGNAL_CHARS = 100; // Relaxed from 200 to 100
 const LENGTH_OVERRIDE_CHARS = 300; // Auto-pass threshold
+const DEFAULT_CHROMIUM_PACK_URL = 'https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar';
 
 // Job-specific keywords for heuristic validation
 const JOB_KEYWORDS = [
@@ -499,10 +500,25 @@ async function getBrowser() {
   const isVercel = !!process.env.VERCEL;
 
   if (isVercel) {
+    let executablePath: string;
+
+    try {
+      executablePath = await chromium.executablePath();
+    } catch (error: any) {
+      const message = error?.message || '';
+      if (!message.includes('does not exist')) {
+        throw error;
+      }
+
+      const chromiumPackUrl = process.env.CHROMIUM_PACK_URL || DEFAULT_CHROMIUM_PACK_URL;
+      console.warn('[Universal Extractor] chromium-min local bin missing. Falling back to remote pack URL.');
+      executablePath = await chromium.executablePath(chromiumPackUrl);
+    }
+
     return await puppeteer.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
+      executablePath,
       headless: chromium.headless,
     });
   }
