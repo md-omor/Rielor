@@ -62,43 +62,30 @@ function prependLibraryPath(path: string) {
 
 async function tryLoadServerlessChromium() {
   if (process.env.VERCEL) {
-    const majorNodeVersion = process.versions.node.split('.')[0];
+    const majorNodeVersion = Number(process.versions.node.split('.')[0]);
     const lambdaRuntime = `nodejs${majorNodeVersion}.x`;
 
     process.env.AWS_EXECUTION_ENV ??= `AWS_Lambda_${lambdaRuntime}`;
     process.env.AWS_LAMBDA_JS_RUNTIME ??= lambdaRuntime;
 
-    const preferredLibPath = Number(majorNodeVersion) >= 20 ? '/tmp/al2023/lib' : '/tmp/al2/lib';
+    const preferredLibPath = majorNodeVersion >= 20 ? "/tmp/al2023/lib" : "/tmp/al2/lib";
     prependLibraryPath(preferredLibPath);
   }
 
   try {
-    const chromiumModule = await import('@sparticuz/chromium-min');
-    console.log('[Universal Extractor] Using @sparticuz/chromium runtime.');
+    const chromiumModule = await import("@sparticuz/chromium-min");
+    console.log("[Universal Extractor] Using @sparticuz/chromium-min runtime.");
     return chromiumModule.default ?? chromiumModule;
-  } catch (error: any) {
-    const message = error?.message || '';
-    if (
-      error?.code !== 'ERR_MODULE_NOT_FOUND' &&
-      !message.includes("Cannot find package '@sparticuz/chromium'")
-    ) {
-      throw error;
-    }
-  }
-
-  try {
-    const chromiumModule = await import('@sparticuz/chromium-min');
-    console.log('[Universal Extractor] Using @sparticuz/chromium-min runtime.');
-    return chromiumModule.default ?? chromiumModule;
-  } catch (error: any) {
-    const message = error?.message || '';
-    if (error?.code === 'ERR_MODULE_NOT_FOUND' || message.includes("Cannot find package '@sparticuz/chromium-min'")) {
-      console.warn('[Universal Extractor] No Sparticuz chromium package is installed. Falling back to system/browser endpoint strategies.');
+  } catch (e: any) {
+    const msg = e?.message || "";
+    if (e?.code === "ERR_MODULE_NOT_FOUND" || msg.includes("Cannot find package")) {
+      console.warn("[Universal Extractor] @sparticuz/chromium-min not installed.");
       return null;
     }
-    throw error;
+    throw e;
   }
 }
+
 
 
 // Job-specific keywords for heuristic validation
@@ -501,80 +488,53 @@ function getRemoteBrowserWSEndpoint() {
 async function getBrowser() {
   const wsEndpoint = getRemoteBrowserWSEndpoint();
   if (wsEndpoint) {
-    console.log('[Universal Extractor] Using remote browser WebSocket endpoint.');
+    console.log("[Universal Extractor] Using remote browser WebSocket endpoint.");
     return await puppeteer.connect({ browserWSEndpoint: wsEndpoint });
   }
 
   const isVercel = !!process.env.VERCEL;
 
-   if (isVercel) {
-    const vercelLocalChromiumDisabled =
-      process.env.VERCEL_ALLOW_LOCAL_CHROMIUM === '0' ||
-      process.env.VERCEL_ALLOW_LOCAL_CHROMIUM === 'false';
+  if (isVercel) {
+    const vercelLocalChromiumEnabled =
+      process.env.VERCEL_ALLOW_LOCAL_CHROMIUM === "1" ||
+      process.env.VERCEL_ALLOW_LOCAL_CHROMIUM === "true";
 
-    if (vercelLocalChromiumDisabled) {
+    if (!vercelLocalChromiumEnabled) {
       throw new Error(
-        'Vercel local Chromium launch is disabled by VERCEL_ALLOW_LOCAL_CHROMIUM=false. Set PUPPETEER_WS_ENDPOINT (recommended) or remove that flag to allow local launch.'
+        "Vercel local Chromium is disabled by default. Set PUPPETEER_WS_ENDPOINT (recommended) or set VERCEL_ALLOW_LOCAL_CHROMIUM=true."
       );
     }
 
     const chromium = await tryLoadServerlessChromium();
-
-    if (chromium) {
-      let executablePath: string;
-
-      try {
-        executablePath = await chromium.executablePath();
-      } catch (error: any) {
-        const message = error?.message || '';
-        if (!message.includes('does not exist')) {
-          throw error;
-        }
-
-        const chromiumPackUrl = process.env.CHROMIUM_PACK_URL || DEFAULT_CHROMIUM_PACK_URL;
-        console.warn('[Universal Extractor] chromium-min local bin missing. Falling back to remote pack URL.');
-        executablePath = await chromium.executablePath(chromiumPackUrl);
-      }
-
-      prependLibraryPath('/tmp/al2023/lib');
-      prependLibraryPath('/tmp/al2/lib');
-
-      return await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath,
-        headless: chromium.headless,
-      });
+    if (!chromium) {
+      throw new Error("chromium-min not available.");
     }
 
-    const executablePathFromEnv =
-      process.env.PUPPETEER_EXECUTABLE_PATH ||
-      process.env.CHROME_PATH ||
-      process.env.GOOGLE_CHROME_BIN;
+    const chromiumPackUrl =
+      process.env.CHROMIUM_PACK_URL ||
+      "https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar";
 
-    if (executablePathFromEnv) {
-      return await puppeteer.launch({
-        headless: true,
-        executablePath: executablePathFromEnv,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-      });
-    }
+    // Always use pack URL on Vercel (most reliable for chromium-min)
+    const executablePath = await chromium.executablePath(chromiumPackUrl);
 
-    throw new Error(
-      'No Chromium runtime available on Vercel. Provide PUPPETEER_WS_ENDPOINT (recommended), or install/configure local Chromium via @sparticuz/chromium-min, CHROMIUM_PACK_URL, or PUPPETEER_EXECUTABLE_PATH/CHROME_PATH.'
-    );
+    return await puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath,
+      headless: chromium.headless,
+    });
   }
 
+  // local dev
   const executablePath = await getLocalChromePath();
   if (!executablePath) {
-    throw new Error(
-      'Local Chrome not found. Set PUPPETEER_EXECUTABLE_PATH (or install Chrome/Brave/Edge).'
-    );
+    throw new Error("Local Chrome not found. Set PUPPETEER_EXECUTABLE_PATH.");
   }
+
   return await puppeteer.launch({
     headless: true,
     executablePath,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
   });
 }
 
