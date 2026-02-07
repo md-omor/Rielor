@@ -11,9 +11,9 @@
  */
 
 import * as cheerio from 'cheerio';
-import puppeteer from "puppeteer-core";
 import fs from "fs";
 import path from "path";
+import puppeteer from "puppeteer-core";
 
 // ============================================================================
 // TYPES
@@ -73,33 +73,34 @@ async function tryLoadServerlessChromium() {
   }
 
   try {
-    const chromiumModule = await import('@sparticuz/chromium');
+    const chromiumModule = await import('@sparticuz/chromium-min');
+    console.log('[Universal Extractor] Using @sparticuz/chromium runtime.');
+    return chromiumModule.default ?? chromiumModule;
+  } catch (error: any) {
+    const message = error?.message || '';
+    if (
+      error?.code !== 'ERR_MODULE_NOT_FOUND' &&
+      !message.includes("Cannot find package '@sparticuz/chromium'")
+    ) {
+      throw error;
+    }
+  }
+
+  try {
+    const chromiumModule = await import('@sparticuz/chromium-min');
+    console.log('[Universal Extractor] Using @sparticuz/chromium-min runtime.');
     return chromiumModule.default ?? chromiumModule;
   } catch (error: any) {
     const message = error?.message || '';
     if (error?.code === 'ERR_MODULE_NOT_FOUND' || message.includes("Cannot find package '@sparticuz/chromium-min'")) {
-      console.warn('[Universal Extractor] @sparticuz/chromium-min is not installed. Falling back to system/browser endpoint strategies.');
+      console.warn('[Universal Extractor] No Sparticuz chromium package is installed. Falling back to system/browser endpoint strategies.');
       return null;
     }
     throw error;
   }
 }
 
-async function loadServerlessChromium() {
-  if (process.env.VERCEL) {
-    const majorNodeVersion = process.versions.node.split('.')[0];
-    const lambdaRuntime = `nodejs${majorNodeVersion}.x`;
 
-    process.env.AWS_EXECUTION_ENV ??= `AWS_Lambda_${lambdaRuntime}`;
-    process.env.AWS_LAMBDA_JS_RUNTIME ??= lambdaRuntime;
-
-    const preferredLibPath = Number(majorNodeVersion) >= 20 ? '/tmp/al2023/lib' : '/tmp/al2/lib';
-    prependLibraryPath(preferredLibPath);
-  }
-
-  const chromiumModule = await import('@sparticuz/chromium');
-  return chromiumModule.default ?? chromiumModule;
-}
 // Job-specific keywords for heuristic validation
 const JOB_KEYWORDS = [
   'responsibilities', 'qualifications', 'requirements', 'required',
@@ -493,6 +494,7 @@ function getRemoteBrowserWSEndpoint() {
   return process.env.PUPPETEER_WS_ENDPOINT || process.env.BROWSER_WS_ENDPOINT || process.env.BROWSERLESS_WS_ENDPOINT;
 }
 
+
 /**
  * Robust browser launcher for both Local and Vercel environments
  */
@@ -506,6 +508,16 @@ async function getBrowser() {
   const isVercel = !!process.env.VERCEL;
 
   if (isVercel) {
+    const vercelLocalChromiumEnabled =
+      process.env.VERCEL_ALLOW_LOCAL_CHROMIUM === '1' ||
+      process.env.VERCEL_ALLOW_LOCAL_CHROMIUM === 'true';
+
+    if (!vercelLocalChromiumEnabled) {
+      throw new Error(
+        'Vercel local Chromium is disabled by default. Set PUPPETEER_WS_ENDPOINT (recommended) or set VERCEL_ALLOW_LOCAL_CHROMIUM=true to attempt local launch.'
+      );
+    }
+
     const chromium = await tryLoadServerlessChromium();
 
     if (chromium) {
