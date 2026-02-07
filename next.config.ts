@@ -1,19 +1,19 @@
-import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-  serverExternalPackages: [
-    "puppeteer-core",
-    "@sparticuz/chromium-min",
-    "pdfjs-dist",
-    "pdf-parse",
-  ],
+const nextConfig = {
+ serverExternalPackages: [
+  "pdfjs-dist",
+  "puppeteer-core",
+],
   outputFileTracingIncludes: {
-    "/api/extract-jd": [
-      "./node_modules/puppeteer-core/**",
-      "./node_modules/@sparticuz/**",
+    "/api/upload": [
+      "./node_modules/pdf-parse/**",
+      "./node_modules/pdfjs-dist/**",
+    ],
+    "/api/analyze-files": [
+      "./node_modules/pdf-parse/**",
+      "./node_modules/pdfjs-dist/**",
     ],
   },
 };
 
 export default nextConfig;
-
