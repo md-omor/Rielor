@@ -10,11 +10,11 @@
  * 6. Returns structured classification (SUCCESS, RESTRICTED, NOT_A_JOB_URL, EMPTY_OR_ERROR)
  */
 
+import chromium from "@sparticuz/chromium-min";
 import * as cheerio from 'cheerio';
 import fs from "fs";
 import path from "path";
 import puppeteer from "puppeteer-core";
-
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -494,44 +494,42 @@ async function getBrowser() {
 
   const isVercel = !!process.env.VERCEL;
 
-  if (isVercel) {
-    const vercelLocalChromiumEnabled =
-      process.env.VERCEL_ALLOW_LOCAL_CHROMIUM === "1" ||
-      process.env.VERCEL_ALLOW_LOCAL_CHROMIUM === "true";
+   if (process.env.VERCEL) {
+    const executablePath = await chromium.executablePath();
 
-    if (!vercelLocalChromiumEnabled) {
-      throw new Error(
-        "Vercel local Chromium is disabled by default. Set PUPPETEER_WS_ENDPOINT (recommended) or set VERCEL_ALLOW_LOCAL_CHROMIUM=true."
-      );
-    }
-
-    const chromium = await tryLoadServerlessChromium();
-    if (!chromium) {
-      throw new Error("chromium-min not available.");
-    }
-
-    const chromiumPackUrl =
-      process.env.CHROMIUM_PACK_URL ||
-      "https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar";
-
-    // Always use pack URL on Vercel (most reliable for chromium-min)
-    const executablePath = await chromium.executablePath(chromiumPackUrl);
-
-    return await puppeteer.launch({
+    return puppeteer.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
       executablePath,
       headless: chromium.headless,
     });
   }
+  
+
+  //   const chromium = await tryLoadServerlessChromium();
+  //   if (!chromium) {
+  //     throw new Error("chromium-min not available.");
+  //   }
+
+  //   const chromiumPackUrl =
+  //     process.env.CHROMIUM_PACK_URL ||
+  //     "https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar";
+
+  //   // Always use pack URL on Vercel (most reliable for chromium-min)
+  //   const executablePath = await chromium.executablePath(chromiumPackUrl);
+
+  //   return await puppeteer.launch({
+  //     args: chromium.args,
+  //     defaultViewport: chromium.defaultViewport,
+  //     executablePath,
+  //     headless: chromium.headless,
+  //   });
+  // }
 
   // local dev
   const executablePath = await getLocalChromePath();
-  if (!executablePath) {
-    throw new Error("Local Chrome not found. Set PUPPETEER_EXECUTABLE_PATH.");
-  }
-
-  return await puppeteer.launch({
+  if (!executablePath) throw new Error("Local Chrome not found.");
+  return puppeteer.launch({
     headless: true,
     executablePath,
     args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
