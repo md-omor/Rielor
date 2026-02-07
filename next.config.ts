@@ -3,6 +3,7 @@ const nextConfig = {
  serverExternalPackages: [
   "pdfjs-dist",
   "puppeteer-core",
+   "pdf-parse",
 ],
   outputFileTracingIncludes: {
     "/api/upload": [

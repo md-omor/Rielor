@@ -79,21 +79,24 @@ export const parseFile = parseFileFromFormData;
  */
 async function parsePDF(buffer: Buffer): Promise<ParseResult> {
   try {
-    const pdfjs: any = await import("pdfjs-dist");
-
-    const loadingTask = pdfjs.getDocument({
-      data: new Uint8Array(buffer),
-      disableWorker: true, // ✅ key fix for Vercel/serverless
-    });
-
-    const pdf = await loadingTask.promise;
-
-    let text = "";
-    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-      const page = await pdf.getPage(pageNum);
-      const content = await page.getTextContent();
-      text += content.items.map((it: any) => it.str).join(" ") + "\n";
+    const pdfModule: any = require("pdf-parse");
+    
+    // In pdf-parse v2.4.5, we use the PDFParse class
+    const PDFParseClass = pdfModule.PDFParse;
+    
+    if (!PDFParseClass) {
+      throw new Error("Unable to resolve PDFParse class from pdf-parse module");
     }
+
+    const parser = new PDFParseClass({
+      data: buffer,
+      verbosity: 0, // Minimize logs
+    });
+    
+    // getText() returns a TextResult object with a .text property
+    const result = await parser.getText();
+    let text = result?.text || "";
+    const pages = result?.pages?.length || 0;
 
     text = text
       .replace(/\u0000/g, "")
@@ -107,36 +110,30 @@ async function parsePDF(buffer: Buffer): Promise<ParseResult> {
       .trim();
 
     if (!text) {
-      throw new Error("PDF contains no extractable text");
+      throw { code: "EMPTY_CONTENT", message: "PDF contains no extractable text" };
     }
+
+    // Clean up
+    await parser.destroy();
 
     return {
       text,
       metadata: {
-        pages: pdf.numPages,
+        pages,
         wordCount: text.split(/\s+/).filter(Boolean).length,
         fileType: "pdf",
       },
     };
-  } catch (error: any) {
+  } catch (error) {
     throw {
       code: "PARSE_ERROR",
-      message: `Failed to parse PDF: ${error?.message || "Unknown error"}`,
-    } as ParseError;
+      message: `Failed to parse PDF: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`,
+    };
   }
 }
 
-async function loadPdfJs() {
-  try {
-    const pdfjs: any = await import("pdfjs-dist");
-    return pdfjs;
-  } catch (error) {
-    throw {
-      code: "PDFJS_LOAD_ERROR",
-      message: `Failed to load pdfjs-dist: ${error instanceof Error ? error.message : "Unknown error"}`,
-    } as ParseError;
-  }
-}
 
 /**
  * Parse DOCX file and extract text content
