@@ -79,11 +79,13 @@ export const parseFile = parseFileFromFormData;
  */
 async function parsePDF(buffer: Buffer): Promise<ParseResult> {
   try {
-    const pdfjs: any = await loadPdfJs();
+    const pdfjs: any = await import("pdfjs-dist");
 
-    pdfjs.GlobalWorkerOptions.workerSrc = null;
+    const loadingTask = pdfjs.getDocument({
+      data: new Uint8Array(buffer),
+      disableWorker: true, // ✅ key fix for Vercel/serverless
+    });
 
-    const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buffer) });
     const pdf = await loadingTask.promise;
 
     let text = "";
@@ -93,8 +95,20 @@ async function parsePDF(buffer: Buffer): Promise<ParseResult> {
       text += content.items.map((it: any) => it.str).join(" ") + "\n";
     }
 
-    text = text.trim();
-    if (!text) throw new Error("PDF contains no extractable text");
+    text = text
+      .replace(/\u0000/g, "")
+      .replace(/\f/g, "\n")
+      .replace(/\r/g, "")
+      .replace(/-\n(?=[a-zA-Z])/g, "")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n[ \t]+/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .replace(/[ \t]{2,}/g, " ")
+      .trim();
+
+    if (!text) {
+      throw new Error("PDF contains no extractable text");
+    }
 
     return {
       text,
