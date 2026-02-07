@@ -507,14 +507,14 @@ async function getBrowser() {
 
   const isVercel = !!process.env.VERCEL;
 
-  if (isVercel) {
-    const vercelLocalChromiumEnabled =
-      process.env.VERCEL_ALLOW_LOCAL_CHROMIUM === '1' ||
-      process.env.VERCEL_ALLOW_LOCAL_CHROMIUM === 'true';
+   if (isVercel) {
+    const vercelLocalChromiumDisabled =
+      process.env.VERCEL_ALLOW_LOCAL_CHROMIUM === '0' ||
+      process.env.VERCEL_ALLOW_LOCAL_CHROMIUM === 'false';
 
-    if (!vercelLocalChromiumEnabled) {
+    if (vercelLocalChromiumDisabled) {
       throw new Error(
-        'Vercel local Chromium is disabled by default. Set PUPPETEER_WS_ENDPOINT (recommended) or set VERCEL_ALLOW_LOCAL_CHROMIUM=true to attempt local launch.'
+        'Vercel local Chromium launch is disabled by VERCEL_ALLOW_LOCAL_CHROMIUM=false. Set PUPPETEER_WS_ENDPOINT (recommended) or remove that flag to allow local launch.'
       );
     }
 
@@ -561,7 +561,7 @@ async function getBrowser() {
     }
 
     throw new Error(
-      'No Chromium runtime available on Vercel. Either install @sparticuz/chromium-min, set CHROMIUM_PACK_URL, set PUPPETEER_EXECUTABLE_PATH/CHROME_PATH, or provide PUPPETEER_WS_ENDPOINT.'
+      'No Chromium runtime available on Vercel. Provide PUPPETEER_WS_ENDPOINT (recommended), or install/configure local Chromium via @sparticuz/chromium-min, CHROMIUM_PACK_URL, or PUPPETEER_EXECUTABLE_PATH/CHROME_PATH.'
     );
   }
 
