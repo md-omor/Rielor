@@ -10,11 +10,10 @@
  * 6. Returns structured classification (SUCCESS, RESTRICTED, NOT_A_JOB_URL, EMPTY_OR_ERROR)
  */
 
-import chromium from "@sparticuz/chromium-min";
 import * as cheerio from 'cheerio';
 import fs from "fs";
 import path from "path";
-import puppeteer from "puppeteer-core";
+import { chromium, Route } from 'playwright-core';
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -43,48 +42,10 @@ const MAX_REDIRECTS = 10; // Universal redirect following budget
 const MIN_STRONG_SIGNAL_CHARS = 50;
 const MIN_WEAK_SIGNAL_CHARS = 100; // Relaxed from 200 to 100
 const LENGTH_OVERRIDE_CHARS = 300; // Auto-pass threshold
-const DEFAULT_CHROMIUM_PACK_URL = 'https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar';
 
-function prependLibraryPath(path: string) {
-  if (!path) return;
-
-  const current = process.env.LD_LIBRARY_PATH;
-  if (!current) {
-    process.env.LD_LIBRARY_PATH = path;
-    return;
-  }
-
-  const parts = current.split(':');
-  if (!parts.includes(path)) {
-    process.env.LD_LIBRARY_PATH = [path, ...parts].join(':');
-  }
-}
-
-async function tryLoadServerlessChromium() {
-  if (process.env.VERCEL) {
-    const majorNodeVersion = Number(process.versions.node.split('.')[0]);
-    const lambdaRuntime = `nodejs${majorNodeVersion}.x`;
-
-    process.env.AWS_EXECUTION_ENV ??= `AWS_Lambda_${lambdaRuntime}`;
-    process.env.AWS_LAMBDA_JS_RUNTIME ??= lambdaRuntime;
-
-    const preferredLibPath = majorNodeVersion >= 20 ? "/tmp/al2023/lib" : "/tmp/al2/lib";
-    prependLibraryPath(preferredLibPath);
-  }
-
-  try {
-    const chromiumModule = await import("@sparticuz/chromium-min");
-    console.log("[Universal Extractor] Using @sparticuz/chromium-min runtime.");
-    return chromiumModule.default ?? chromiumModule;
-  } catch (e: any) {
-    const msg = e?.message || "";
-    if (e?.code === "ERR_MODULE_NOT_FOUND" || msg.includes("Cannot find package")) {
-      console.warn("[Universal Extractor] @sparticuz/chromium-min not installed.");
-      return null;
-    }
-    throw e;
-  }
-}
+// Remote browser configuration
+const BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN;
+const BROWSERLESS_ENDPOINT = `wss://production-sfo.browserless.io/chromium/playwright?token=${BROWSERLESS_TOKEN}`;
 
 
 
@@ -408,131 +369,29 @@ function extractWithCheerio(html: string): { text: string; method: string } | nu
   }
 
   return null;
-}
-
-// ============================================================================
+}// ============================================================================
 // STAGE 4: HEADLESS BROWSER FALLBACK
 // ============================================================================
 
-/**
- * Checks if HTML contains script tags (indicates JS rendering needed)
- */
-function hasScriptTags(html: string): boolean {
-  return html.includes('<script');
-}
-
-
 
 /**
- * Renders page with headless browser and extracts content
- */
-/**
- * Robust browser launcher for both Local and Vercel environments
- */
-// async function getBrowser() {
-//   const isVercel = !!process.env.VERCEL || !!process.env.AWS_EXECUTION_ENV;
-
-//   try {
-//     if (isVercel) {
-//       console.log('[Universal Extractor] Vercel environment detected, using @sparticuz/chromium-min');
-//       const sparticuzChromium = require('@sparticuz/chromium-min');
-
-//       return await puppeteer.launch({
-//         args: sparticuzChromium.args,
-//         defaultViewport: sparticuzChromium.defaultViewport,
-//         executablePath: await sparticuzChromium.executablePath('https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar'),
-//         headless: sparticuzChromium.headless,
-//       });
-//     }
-//   } catch (e: any) {
-//     console.error('[Universal Extractor] Chromium launch failed:', e?.message);
-//     if (isVercel) {
-//       throw new Error(`Failed to launch Chromium on Vercel: ${e?.message}`);
-//     }
-//     console.warn('[Universal Extractor] Falling back to standard launch');
-//   }
-
-//   console.log('[Universal Extractor] Using standard puppeteer launch');
-  
-//   // Try to find local chrome on Windows
-//   let executablePath;
-//   if (process.platform === 'win32') {
-//     const fs = require('fs');
-//     const paths = [
-//       'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-//       'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-//       'C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
-//       'C:\\Program Files (x86)\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
-//       (process.env.LOCALAPPDATA || '') + '\\Google\\Chrome\\Application\\chrome.exe',
-//       (process.env.LOCALAPPDATA || '') + '\\BraveSoftware\\Brave-Browser\\Application\\brave.exe'
-//     ];
-//     executablePath = paths.find(p => p && fs.existsSync(p));
-//   }
-
-//   return await puppeteer.launch({
-//     headless: true,
-//     executablePath,
-//     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-//   });
-// }
-
-
-function getRemoteBrowserWSEndpoint() {
-  return process.env.PUPPETEER_WS_ENDPOINT || process.env.BROWSER_WS_ENDPOINT || process.env.BROWSERLESS_WS_ENDPOINT;
-}
-
-
-/**
- * Robust browser launcher for both Local and Vercel environments
+ * Robust browser launcher for both Local and Vercel environments using browserless.io
  */
 async function getBrowser() {
-  const wsEndpoint = getRemoteBrowserWSEndpoint();
-  if (wsEndpoint) {
-    console.log("[Universal Extractor] Using remote browser WebSocket endpoint.");
-    return await puppeteer.connect({ browserWSEndpoint: wsEndpoint });
+  if (BROWSERLESS_TOKEN) {
+    console.log("[Universal Extractor] Connecting to browserless.io...");
+    return await chromium.connect(BROWSERLESS_ENDPOINT);
   }
 
-  const isVercel = !!process.env.VERCEL;
-
-   if (process.env.VERCEL) {
-    const executablePath = await chromium.executablePath();
-
-    return puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath,
-      headless: chromium.headless,
-    });
+  console.log("[Universal Extractor] Fallback to local Chrome...");
+  const executablePath = await getLocalChromePath();
+  if (!executablePath) {
+    throw new Error("Local Chrome not found and BROWSERLESS_TOKEN is missing.");
   }
   
-
-  //   const chromium = await tryLoadServerlessChromium();
-  //   if (!chromium) {
-  //     throw new Error("chromium-min not available.");
-  //   }
-
-  //   const chromiumPackUrl =
-  //     process.env.CHROMIUM_PACK_URL ||
-  //     "https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar";
-
-  //   // Always use pack URL on Vercel (most reliable for chromium-min)
-  //   const executablePath = await chromium.executablePath(chromiumPackUrl);
-
-  //   return await puppeteer.launch({
-  //     args: chromium.args,
-  //     defaultViewport: chromium.defaultViewport,
-  //     executablePath,
-  //     headless: chromium.headless,
-  //   });
-  // }
-
-  // local dev
-  const executablePath = await getLocalChromePath();
-  if (!executablePath) throw new Error("Local Chrome not found.");
-  return puppeteer.launch({
-    headless: true,
+  return await chromium.launch({
     executablePath,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+    headless: true,
   });
 }
 
@@ -547,18 +406,18 @@ async function extractWithHeadless(url: string): Promise<{ text: string; method:
     console.log('[Universal Extractor] Launching headless browser...');
     
     browser = await getBrowser();
-    const page = await browser.newPage();
-
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
+    const context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
+    });
+    const page = await context.newPage();
 
     // Block images, media, fonts for speed
-    await page.setRequestInterception(true);
-    page.on('request', (request) => {
-      const resourceType = request.resourceType();
+    await page.route('**/*', (route: Route) => {
+      const resourceType = route.request().resourceType();
       if (['image', 'media', 'font', 'stylesheet'].includes(resourceType)) {
-        request.abort();
+        route.abort();
       } else {
-        request.continue();
+        route.continue();
       }
     });
 
@@ -568,8 +427,8 @@ async function extractWithHeadless(url: string): Promise<{ text: string; method:
       timeout: FETCH_TIMEOUT_MS 
     });
 
-    // Wait for potential dynamic content (using native setTimeout or waitForTimeout if available in older puppets)
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Wait for potential dynamic content
+    await page.waitForTimeout(2000);
 
     // Get rendered HTML
     const html = await page.content();
