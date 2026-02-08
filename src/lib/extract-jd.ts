@@ -100,23 +100,6 @@ export async function extractJDFromURLWithMeta(
 }
 
 // ============================================================================
-// TEST UTILITIES
-// ============================================================================
-
-type FetchLike = typeof fetch;
-
-export function __setFetchForTest(impl: FetchLike | null) {
-  // This is now a no-op for backward compatibility
-  // The universal extractor has its own test injection
-  console.warn('[extract-jd] __setFetchForTest is deprecated, use universal-jd-extractor directly');
-}
-
-export function __setCallAIForTest(impl: ((prompt: string) => Promise<string>) | null) {
-  // This is now a no-op for backward compatibility
-  console.warn('[extract-jd] __setCallAIForTest is deprecated');
-}
-
-// ============================================================================
 // RE-EXPORTS
 // ============================================================================
 
